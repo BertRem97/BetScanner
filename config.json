@@ -1,0 +1,51 @@
+{
+  "oddspapi_keys": [
+    "dc6101bc-b007-451c-8ad3-a455bca5e662", "369e0c5a-ec63-44fc-93ef-d6b7d4af0e5e",
+    "ca43f14e-8ef2-4828-a39d-436a02d053cb", "fd6357fb-7baa-4dca-876b-3357c4829aa7",
+    "e7df2c08-793e-42f8-bbec-c6f0a5127e2e", "946fe035-a86f-4108-8e94-dc97b643969b",
+    "5129271c-9e28-4e59-85aa-40ec629d561a", "fee43071-00e8-49b0-bc47-b46648a07b71",
+    "4eec8c5e-d7f5-47cb-ab2d-daf6c01428f5", "464ef8c1-1e44-47e9-8b2e-477d285b9a9d",
+    "e64b8ebc-1584-40b6-9749-1f32f4261c35", "9dc7b006-cb67-4924-86d8-8e237d1f0667",
+    "2ed351b5-1c2c-458c-96e0-c818505a7ae5", "2f783825-88ae-4b60-88ff-f74cf14dd4b4",
+    "d74913d5-9a18-430d-ab56-1d7b009cca0d", "6e3bd259-c63c-4259-8fab-b89970d7ca7f",
+    "ad33a6db-2525-4707-8ced-702b4dc52d25", "8f47edbf-4223-41a6-846e-4d1675ee1f23",
+    "a0466b70-657a-4183-9d2c-f8b4012c6380", "3ef0fbe1-0d02-47e7-939e-ca85314541b4",
+    "6feefbad-365a-401d-b36e-62984a778cdd", "14bbad9e-0fc3-4582-a402-06b77713137b",
+    "f5f5333a-af35-4b14-9f22-5a72533e88a5", "fa9f885d-2d14-4003-950a-bb6dcf082704",
+    "a4985762-5d41-449c-9fa7-466e049592ad", "82d21cb0-bd3f-40be-b72d-00fe2d772c1a",
+    "d482161a-ade7-4d30-8f04-c3e39692be82", "26729149-3dca-47c6-b129-0dec5ce96b1e",
+    "04c52afe-bf59-4503-8904-624338611ece", "79d69b80-4084-4383-b5a5-1ab5809d277c",
+    "79d69b80-4084-4383-b5a5-1ab5809d277c", "79d69b80-4084-4383-b5a5-1ab5809d277c"
+
+                 
+  ],
+
+  "requests_per_key": 250,
+  "telegram_bot_token": "8637867779:AAGQq9jN_IbZkHqdkyMIbFc9GgXxufoJxb0",
+  "telegram_chat_id": "6980285678",
+  "google_credentials_path": "C:\\Users\\User\\Documents\\project\\credentials.json",
+  "google_spreadsheet_id": "1Q2ALPTkGx8SICor1c4cDjZWI5Ewg_OKugvr0yUNY_WQ",
+  "min_ev_threshold": 10,
+  "kelly_fraction": 0.25,
+  "bankroll": 1000,
+  "sport_id": 10,
+  "max_tournaments": 50,
+  "days_ahead": 30,
+  "request_delay": 1.0,
+  "scan_interval": 300,
+  "vpn": {
+    "enabled": false,
+    "rotate_every": 10,
+    "servers": [
+      "nl-ams",
+      "de-fra",
+      "gb-lon",
+      "fr-par",
+      "be-bru",
+      "at-vie",
+      "se-sto",
+      "us-nyc"
+    ]
+  },
+  "_comment": "kelly_fraction 0.25 = quarter Kelly, 0.5 = half Kelly. VPN: set enabled=true on Raspberry Pi with Surfshark installed."
+}
