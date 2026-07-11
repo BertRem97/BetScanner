@@ -25,6 +25,8 @@ from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field
 import os
 from pathlib import Path
+from collections import defaultdict
+from pprint import pprint
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -186,10 +188,11 @@ class OddsPapiClient:
         'pinnacle', 'betfair', 'sbobet'
     ]
 
-    def __init__(self, api_keys, requests_per_key: int = 250, vpn: 'SurfsharkVPN' = None):
+    def __init__(self, api_keys, settlements, requests_per_key: int = 250, vpn: 'SurfsharkVPN' = None):
         self.key_manager = ApiKeyManager(api_keys, requests_per_key)
         self.session = requests.Session()
         self.vpn = vpn
+        self.settlements = settlements
 
     def _make_request(self, endpoint: str, params: Dict = None) -> requests.Response:
         if self.vpn:
@@ -268,14 +271,23 @@ class OddsPapiClient:
         except Exception as e:
             logger.error(f"Error fetching odds for {fixture_id}: {e}")
             return {}
-
+        
+  
     def get_settlements(self, fixture_ids: List[str]) -> List[Dict]:
         if not fixture_ids:
             return []
+        
         try:
-            response = self._make_request("settlements", {'fixtureId': ','.join(fixture_ids[:100])})
-            response.raise_for_status()
-            return response.json()
+            for id in fixture_ids:
+                for x in self.settlements:
+                    if id == x["fixtureId"]:
+                        continue
+
+                response = self._make_request("settlements", {'fixtureId': id})
+    
+                response.raise_for_status()
+                self.settlements.append(response.json())
+
         except Exception as e:
             logger.error(f"Error fetching settlements: {e}")
             return []
@@ -1326,6 +1338,7 @@ class ValueBetScanner:
     def __init__(self, config: Dict):
         self.config = config
         self.is_scanning = False
+        self.settlements = []
 
         api_keys = config.get('oddspapi_keys', [])
         if not api_keys:
@@ -1348,7 +1361,7 @@ class ValueBetScanner:
             logger.info(f"VPN initialised — server: {self.vpn.status}")
 
         self.odds_client = OddsPapiClient(
-            api_keys, config.get('requests_per_key', 250), vpn=self.vpn
+            api_keys, self.settlements, config.get('requests_per_key', 250), vpn=self.vpn, 
         )
         logger.info(f"Initialized with {len(api_keys)} API key(s)")
 
@@ -1418,26 +1431,29 @@ class ValueBetScanner:
 
         fixture_ids = [b['fixture_id'] for b in self.confirmed_bets
                        if not b['fixture_id'].startswith('manual_')]
-        settlements = self.odds_client.get_settlements(fixture_ids)
-
+        self.odds_client.get_settlements(fixture_ids)
+        print('-------')
         updated = wins = losses = 0
-        settlement_map = {s.get('fixtureId'): s for s in settlements}
+
 
         for bet in self.confirmed_bets:
             fid = bet['fixture_id']
-            if fid in settlement_map:
-                s = settlement_map[fid]
-                result = s.get('marketResults', {}).get(
-                    bet['market_id'], {}
-                ).get(bet['outcome_id'], 'UNDECIDED')
-                status = result.upper()
-                if 'WIN' in status:
-                    wins += 1
-                elif 'LOSE' in status:
-                    losses += 1
-                if self.sheets:
-                    self.sheets.update_settlement(fid, status)
-                updated += 1
+            market_id = bet['market_id']
+
+            for i in self.settlements:
+                if fid == i['fixtureId']:
+                    print(fid)
+                    result = i.get("markets",{}).get(market_id, {}).get("outcomes", {}).get(market_id, {}).get("players", {}).get("0", {}).get("result", 'UNKNOWN')
+                    print(result)
+             
+                    status = result.upper()
+                    if 'WIN' in status:
+                        wins += 1
+                    elif 'LOSE' in status:
+                        losses += 1
+                    if self.sheets:
+                        self.sheets.update_settlement(fid, status)
+                    updated += 1
 
         return f"Bijgewerkt: {updated}\nGewonnen: {wins}\nVerloren: {losses}"
 
