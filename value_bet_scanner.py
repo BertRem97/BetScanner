@@ -637,7 +637,7 @@ class GoogleSheetsManager:
         try:
             self.service.spreadsheets().values().append(
                 spreadsheetId=self.spreadsheet_id,
-                range=f"'{sheet_name}'!A1",
+                range=f"'{sheet_name}'!A13",
                 valueInputOption='USER_ENTERED',
                 insertDataOption='INSERT_ROWS',
                 body={'values': [row]}
@@ -656,9 +656,12 @@ class GoogleSheetsManager:
         try:
             result = self.service.spreadsheets().values().get(
                 spreadsheetId=self.spreadsheet_id,
-                range=sheet_range
+                range=f"'{sheet_name}'!A13:A"
             ).execute()
-            return result.get('values', [])
+
+            values = result.get("values", [])
+            return values
+            
         except Exception as e:
             logger.error(f"Error reading sheet: {e}")
             return []
@@ -1535,10 +1538,12 @@ class ValueBetScanner:
         while True:
             try:
                 for update in self.telegram.get_updates():
+                    print(update)
                     result = self.telegram.process_update(update)
 
                     if result:
                         action = result.get('action')
+                        print(action)
 
                         if action == 'run' and not self.is_scanning:
                             self.is_scanning = True
