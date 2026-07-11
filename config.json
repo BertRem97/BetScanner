@@ -23,7 +23,7 @@
   "requests_per_key": 250,
   "telegram_bot_token": "8637867779:AAGQq9jN_IbZkHqdkyMIbFc9GgXxufoJxb0",
   "telegram_chat_id": "6980285678",
-  "google_credentials_path": "C:\\Users\\User\\Documents\\project\\credentials.json",
+  "google_credentials_path": "credentials.json",
   "google_spreadsheet_id": "1Q2ALPTkGx8SICor1c4cDjZWI5Ewg_OKugvr0yUNY_WQ",
   "min_ev_threshold": 10,
   "kelly_fraction": 0.25,
