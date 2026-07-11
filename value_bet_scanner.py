@@ -1600,32 +1600,33 @@ def load_config(path: str = 'config.json') -> Dict:
 
     if Path(path).exists():
         config = json.load(open(path))
+    
+    else:
+        keys_str = os.getenv('ODDSPAPI_KEYS', os.getenv('ODDSPAPI_KEY', ''))
+        if keys_str:
+            config['oddspapi_keys'] = [k.strip() for k in keys_str.split(',') if k.strip()]
 
-    keys_str = os.getenv('ODDSPAPI_KEYS', os.getenv('ODDSPAPI_KEY', ''))
-    if keys_str:
-        config['oddspapi_keys'] = [k.strip() for k in keys_str.split(',') if k.strip()]
+        config.setdefault('telegram_bot_token', os.getenv('TELEGRAM_BOT_TOKEN', ''))
+        config.setdefault('telegram_chat_id', os.getenv('TELEGRAM_CHAT_ID', ''))
+        config.setdefault('google_credentials_path', os.getenv('GOOGLE_CREDENTIALS_PATH', ''))
+        config.setdefault('google_spreadsheet_id', os.getenv('GOOGLE_SPREADSHEET_ID', ''))
+        config.setdefault('min_ev_threshold', float(os.getenv('MIN_EV_THRESHOLD', '2.0')))
+        config.setdefault('kelly_fraction', float(os.getenv('KELLY_FRACTION', '0.25')))
+        config.setdefault('bankroll', float(os.getenv('BANKROLL', '1000')))
+        config.setdefault('sport_id', int(os.getenv('SPORT_ID', '10')))
+        config.setdefault('max_tournaments', int(os.getenv('MAX_TOURNAMENTS', '10')))
+        config.setdefault('days_ahead', int(os.getenv('DAYS_AHEAD', '7')))
+        config.setdefault('request_delay', float(os.getenv('REQUEST_DELAY', '1')))
+        config.setdefault('scan_interval', int(os.getenv('SCAN_INTERVAL', '300')))
+        config.setdefault('requests_per_key', int(os.getenv('REQUESTS_PER_KEY', '250')))
 
-    config.setdefault('telegram_bot_token', os.getenv('TELEGRAM_BOT_TOKEN', ''))
-    config.setdefault('telegram_chat_id', os.getenv('TELEGRAM_CHAT_ID', ''))
-    config.setdefault('google_credentials_path', os.getenv('GOOGLE_CREDENTIALS_PATH', ''))
-    config.setdefault('google_spreadsheet_id', os.getenv('GOOGLE_SPREADSHEET_ID', ''))
-    config.setdefault('min_ev_threshold', float(os.getenv('MIN_EV_THRESHOLD', '2.0')))
-    config.setdefault('kelly_fraction', float(os.getenv('KELLY_FRACTION', '0.25')))
-    config.setdefault('bankroll', float(os.getenv('BANKROLL', '1000')))
-    config.setdefault('sport_id', int(os.getenv('SPORT_ID', '10')))
-    config.setdefault('max_tournaments', int(os.getenv('MAX_TOURNAMENTS', '10')))
-    config.setdefault('days_ahead', int(os.getenv('DAYS_AHEAD', '7')))
-    config.setdefault('request_delay', float(os.getenv('REQUEST_DELAY', '1')))
-    config.setdefault('scan_interval', int(os.getenv('SCAN_INTERVAL', '300')))
-    config.setdefault('requests_per_key', int(os.getenv('REQUESTS_PER_KEY', '250')))
-
-    # VPN config from env (merges with any 'vpn' block already in config.json)
-    vpn_cfg = config.setdefault('vpn', {})
-    vpn_cfg.setdefault('enabled', os.getenv('VPN_ENABLED', 'false').lower() == 'true')
-    servers_env = os.getenv('VPN_SERVERS', '')
-    if servers_env:
-        vpn_cfg.setdefault('servers', [s.strip() for s in servers_env.split(',') if s.strip()])
-    vpn_cfg.setdefault('rotate_every', int(os.getenv('VPN_ROTATE_EVERY', '10')))
+        # VPN config from env (merges with any 'vpn' block already in config.json)
+        vpn_cfg = config.setdefault('vpn', {})
+        vpn_cfg.setdefault('enabled', os.getenv('VPN_ENABLED', 'false').lower() == 'true')
+        servers_env = os.getenv('VPN_SERVERS', '')
+        if servers_env:
+            vpn_cfg.setdefault('servers', [s.strip() for s in servers_env.split(',') if s.strip()])
+        vpn_cfg.setdefault('rotate_every', int(os.getenv('VPN_ROTATE_EVERY', '10')))
 
     return config
 
