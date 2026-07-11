@@ -190,35 +190,46 @@ class OddsPapiClient:
         self.session = requests.Session()
         self.vpn = vpn
         self.settlements = settlements
+        self.api_keys = api_keys
+        self.exhausted = False
 
     def _make_request(self, endpoint: str, params: Dict = None) -> requests.Response:
+        
         if self.vpn:
             self.vpn.maybe_rotate()
 
-        api_key = self.key_manager.get_next_key()
         if params is None:
             params = {}
-        params['apiKey'] = api_key
 
-        try:
-            response = self.session.get(
-                f"{self.BASE_URL}/{endpoint}",
-                params=params,
-                timeout=30
-            )
-            self.key_manager.record_request(api_key)
-            if response.status_code == 429:
-                logger.warning(f"Error fetching data {response.url}\nKey{api_key} is drained")
+        count = 0
+        while count < len(self.api_keys):
+            api_key = self.key_manager.get_next_key()
+            params['apiKey'] = api_key
+
+            try:
+                response = self.session.get(
+                    f"{self.BASE_URL}/{endpoint}",
+                    params=params,
+                    timeout=30
+                )
+                self.key_manager.record_request(api_key)
+                if response.status_code == 429:
+                    logger.warning(f"Error fetching data {response.url}\nKey{api_key} is drained")
+                    self.key_manager.record_error(api_key)
+                    count += 1
+                    if self.vpn:
+                        # Force an immediate server rotation on rate-limit
+                        self.vpn.connect()
+
+                    continue
+                
+                return response
+            except Exception as e:
                 self.key_manager.record_error(api_key)
-
-                if self.vpn:
-                    # Force an immediate server rotation on rate-limit
-                    self.vpn.connect()
-                return self._make_request(endpoint, params)
-            return response
-        except Exception as e:
-            self.key_manager.record_error(api_key)
-            raise
+                logger.warning(f"Connection error with key {api_key}")
+        
+        self.exhausted = True
+        raise Exception("All API keys exhausted")  
 
     def get_key_status(self) -> Dict:
         return self.key_manager.get_status()
@@ -1467,6 +1478,7 @@ class ValueBetScanner:
         logger.info(f"API Status: {status['total_remaining']} requests remaining")
 
         sport_id = self.config.get('sport_id', 10)
+
         tournaments = self.odds_client.get_tournaments(sport_id)
         active = [t for t in tournaments
                   if t.get('upcomingFixtures', 0) > 0 or t.get('futureFixtures', 0) > 0]
