@@ -208,7 +208,9 @@ class OddsPapiClient:
             )
             self.key_manager.record_request(api_key)
             if response.status_code == 429:
+                logger.warning(f"Error fetching data {response.url}\nKey{api_key} is drained")
                 self.key_manager.record_error(api_key)
+
                 if self.vpn:
                     # Force an immediate server rotation on rate-limit
                     self.vpn.connect()
