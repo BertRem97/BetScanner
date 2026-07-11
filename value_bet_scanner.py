@@ -470,6 +470,7 @@ class GoogleSheetsManager:
         self._sheet_lock = threading.Lock()
         # In-process cache: set of sheet names known to exist
         self._known_sheets: Optional[set] = None
+        self.first_data_row = 13
 
         if not GOOGLE_SHEETS_AVAILABLE:
             logger.warning("Google Sheets libraries not installed")
@@ -637,7 +638,7 @@ class GoogleSheetsManager:
         try:
             self.service.spreadsheets().values().append(
                 spreadsheetId=self.spreadsheet_id,
-                range=f"'{sheet_name}'!A13",
+                range=f"'{sheet_name}'!A{self.first_data_row}",
                 valueInputOption='USER_ENTERED',
                 insertDataOption='INSERT_ROWS',
                 body={'values': [row]}
@@ -676,7 +677,7 @@ class GoogleSheetsManager:
             col_letter = chr(65 + col)
             self.service.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
-                range=f"'{sheet_name}'!{col_letter}{row + 1}",
+                range=f"'{sheet_name}'!{col_letter}{row + self.first_data_row}",
                 valueInputOption='USER_ENTERED',
                 body={'values': [[value]]}
             ).execute()
@@ -1432,7 +1433,6 @@ class ValueBetScanner:
         fixture_ids = [b['fixture_id'] for b in self.confirmed_bets
                        if not b['fixture_id'].startswith('manual_')]
         self.odds_client.get_settlements(fixture_ids)
-        print('-------')
         updated = wins = losses = 0
 
 
@@ -1442,10 +1442,9 @@ class ValueBetScanner:
 
             for i in self.settlements:
                 if fid == i['fixtureId']:
-                    print(fid)
+      
                     result = i.get("markets",{}).get(market_id, {}).get("outcomes", {}).get(market_id, {}).get("players", {}).get("0", {}).get("result", 'UNKNOWN')
-                    print(result)
-             
+
                     status = result.upper()
                     if 'WIN' in status:
                         wins += 1
@@ -1538,12 +1537,10 @@ class ValueBetScanner:
         while True:
             try:
                 for update in self.telegram.get_updates():
-                    print(update)
                     result = self.telegram.process_update(update)
 
                     if result:
                         action = result.get('action')
-                        print(action)
 
                         if action == 'run' and not self.is_scanning:
                             self.is_scanning = True
@@ -1577,10 +1574,8 @@ class ValueBetScanner:
     def _log_bet(self, bet: ValueBet):
         """Write a confirmed bet to the monthly Google Sheet."""
         if self.sheets:
-            print(self.sheets)
             d = bet.to_dict()
             row = [d.get(h, '') for h in SHEET_HEADERS]
-            print(row)
             sheet_name = self.sheets.get_or_create_monthly_sheet()
             self.sheets.append_row(row, sheet_name=sheet_name)
         self._save_confirmed(bet)
