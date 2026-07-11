@@ -1,0 +1,18 @@
+# Value Bet Scanner Dependencies
+
+# HTTP requests
+requests>=2.31.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# Google Sheets integration (optional)
+google-auth>=2.23.0
+google-auth-oauthlib>=1.1.0
+google-api-python-client>=2.100.0
+
+# Async support (optional, for WebSocket)
+aiohttp>=3.9.0
+
+# Data handling
+pandas>=2.0.0
