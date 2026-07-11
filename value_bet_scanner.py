@@ -53,10 +53,9 @@ SHEET_HEADERS = [
     'Datum', 'Start wedstrijd', 'Event fixture', 'Match',
     'Market', 'Outcome', 'Land / Tournooi', 'League',
     'Soft Book', 'Odds overzicht (soft)', 'Sharp Ref (mediaan)',
-    'EV %', 'Win Prob', 'Stake Amount', 'Bankroll', 'Kelly %',
-    'Betslip', 'Ingezet', 'Winst/Verlies', 'Settlement'
+    'EV %', 'Win Prob', 'Stake Amount', 'Kelly %',
+    'Betslip', 'Mogelijke winst', 'Settlement'
 ]
-
 
 class ApiKeyManager:
     """Manager for multiple API keys with rotation and rate limiting"""
@@ -140,7 +139,7 @@ class ValueBet:
     def to_dict(self) -> Dict:
         # Build a compact odds overview string: "cashpoint:2.10 unibet:2.05 ..."
         odds_str = '  '.join(
-            f"{bk}:{o:.2f}"
+            f"{bk} @ {o:.2f}"
             for bk, o in sorted(self.soft_bookmaker_odds.items(), key=lambda x: -x[1])
         )
         return {
@@ -158,11 +157,9 @@ class ValueBet:
             'EV %': f"{self.ev_percentage:.2f}%",
             'Win Prob': f"{self.win_probability:.1%}",
             'Stake Amount': f"{self.stake_amount:.2f}",
-            'Bankroll': f"{self.bankroll:.2f}",
             'Kelly %': f"{self.kelly_fraction:.2%}",
             'Betslip': self.betslip_url or '',
-            'Ingezet': '',
-            'Winst/Verlies': '',
+            'Mogelijke winst': f"{self.soft_odds * self.stake_amount - self.stake_amount:.2f}",
             'Settlement': self.settlement_status
         }
 
@@ -1575,8 +1572,10 @@ class ValueBetScanner:
     def _log_bet(self, bet: ValueBet):
         """Write a confirmed bet to the monthly Google Sheet."""
         if self.sheets:
+            print(self.sheets)
             d = bet.to_dict()
             row = [d.get(h, '') for h in SHEET_HEADERS]
+            print(row)
             sheet_name = self.sheets.get_or_create_monthly_sheet()
             self.sheets.append_row(row, sheet_name=sheet_name)
         self._save_confirmed(bet)
