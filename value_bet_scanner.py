@@ -11,7 +11,7 @@ Features:
 - Settlement tracking via API
 - Google Sheets logging with monthly tabs
 """
-
+import re
 import requests
 import json
 import time
@@ -191,7 +191,7 @@ class OddsPapiClient:
         self.vpn = vpn
         self.settlements = settlements
         self.api_keys = api_keys
-        self.exhausted = False
+
 
     def _make_request(self, endpoint: str, params: Dict = None) -> requests.Response:
         
@@ -213,7 +213,30 @@ class OddsPapiClient:
                     timeout=30
                 )
                 self.key_manager.record_request(api_key)
-                if response.status_code == 429:
+                
+             
+            except requests.RequestException as e:
+                self.key_manager.record_error(api_key)
+                logger.warning(f"Connection error with key {api_key}: {e}")
+                count += 1
+                continue
+
+            if response.status_code == 403:
+                count += 1
+
+                try:
+                    error = response.json().get("error", "")
+                except ValueError:
+                    error = response.text.strip()
+
+
+                if error == "Forbidden":
+                    logger.warning("Forbidden 403 -> rotate IP address")
+                    # rotate_ip()
+
+                continue
+            
+            if response.status_code == 429:
                     logger.warning(f"Error fetching data {response.url}\nKey{api_key} is drained")
                     self.key_manager.record_error(api_key)
                     count += 1
@@ -222,14 +245,12 @@ class OddsPapiClient:
                         self.vpn.connect()
 
                     continue
-                
-                return response
-            except Exception as e:
-                self.key_manager.record_error(api_key)
-                logger.warning(f"Connection error with key {api_key}")
-        
-        self.exhausted = True
-        raise Exception("All API keys exhausted")  
+            
+            if response.status_code == 200:
+                return response.json()
+
+        logger.warning("Problem fetching data")
+        return None
 
     def get_key_status(self) -> Dict:
         return self.key_manager.get_status()
@@ -237,6 +258,8 @@ class OddsPapiClient:
     def get_sports(self) -> List[Dict]:
         try:
             response = self._make_request("sports")
+            if response is None:
+                return None
             response.raise_for_status()
             return response.json()
         except Exception as e:
@@ -246,6 +269,8 @@ class OddsPapiClient:
     def get_tournaments(self, sport_id: int = 10) -> List[Dict]:
         try:
             response = self._make_request("tournaments", {'sportId': sport_id})
+            if response is None:
+                return None
             response.raise_for_status()
             return response.json()
         except Exception as e:
@@ -267,6 +292,8 @@ class OddsPapiClient:
 
         try:
             response = self._make_request("fixtures", params)
+            if response is None:
+                return None
             response.raise_for_status()
             return response.json()
         except Exception as e:
@@ -276,6 +303,8 @@ class OddsPapiClient:
     def get_odds(self, fixture_id: str) -> Dict:
         try:
             response = self._make_request("odds", {'fixtureId': fixture_id})
+            if response is None:
+                return None
             response.raise_for_status()
             return response.json()
         except Exception as e:
@@ -294,7 +323,8 @@ class OddsPapiClient:
                         continue
 
                 response = self._make_request("settlements", {'fixtureId': id})
-    
+                if response is None:
+                    return None
                 response.raise_for_status()
                 self.settlements.append(response.json())
 
@@ -483,7 +513,7 @@ class GoogleSheetsManager:
         self._sheet_lock = threading.Lock()
         # In-process cache: set of sheet names known to exist
         self._known_sheets: Optional[set] = None
-        self.first_data_row = 13
+        self.first_data_row = 12
 
         if not GOOGLE_SHEETS_AVAILABLE:
             logger.warning("Google Sheets libraries not installed")
@@ -500,6 +530,122 @@ class GoogleSheetsManager:
     # ------------------------------------------------------------------
     # Low-level helpers
     # ------------------------------------------------------------------
+    def update_main_sheet_totals(self, main_sheet="Dashboard"):
+
+        try:
+            spreadsheet = self.service.spreadsheets().get(
+                spreadsheetId=self.spreadsheet_id
+            ).execute()
+
+            sheets = spreadsheet.get("sheets", [])
+
+            pattern = re.compile(r"^\d{4}-\d{2}$")
+
+            monthly_sheets = [
+                s["properties"]["title"]
+                for s in sheets
+                if pattern.match(s["properties"]["title"])
+            ]
+
+            len_monthly_sheets = len(monthly_sheets)
+
+            # 5 rijen voor B2:B6 en 5 rijen voor D2:D6
+            total_B = [0, 0, 0, 0, 0]
+            total_D = [0, 0, 0, 0, 0]
+
+
+            for sheet_name in monthly_sheets:
+
+                # Kolom B ophalen
+                result_B = self.service.spreadsheets().values().get(
+                    spreadsheetId=self.spreadsheet_id,
+                    range=f"{sheet_name}!B2:B6"
+                ).execute()
+
+                values_B = result_B.get("values", [])
+
+                for i, row in enumerate(values_B):
+                    if i >= len(total_B):
+                        break
+
+                    if len(row) == 0:
+                        continue
+
+                    try:
+                        total_B[i] += float(row[0])
+                    except (ValueError, TypeError):
+                        continue
+
+                # Kolom D ophalen
+                result_D = self.service.spreadsheets().values().get(
+                    spreadsheetId=self.spreadsheet_id,
+                    range=f"{sheet_name}!D2:D6"
+                ).execute()
+
+                values_D = result_D.get("values", [])
+
+                for i, row in enumerate(values_D):
+                    if i >= len(total_D):
+                        break
+
+                    if len(row) == 0:
+                        continue
+
+                    try:
+                        total_D[i] += float(row[0])
+                    except (ValueError, TypeError):
+                        continue
+
+            # Resultaat samenvoegen voor Dashboard A2:D6
+            output = []
+
+            for i in range(5):
+                output.append([
+                    "",              # A behoudt beschrijving
+                    total_B[i],      # B totalen
+                    "",              # C behoudt beschrijving
+                    total_D[i]       # D totalen
+                ])
+
+
+            # Schrijf enkel B2:B6
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{main_sheet}!B2:B6",
+                valueInputOption="USER_ENTERED",
+                body={
+                    "values": [[value] for value in total_B]
+                }
+            ).execute()
+
+            # Schrijf enkel D2:D6
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{main_sheet}!D2:D6",
+                valueInputOption="USER_ENTERED",
+                body={
+                    "values": [[value] for value in total_D]
+                }
+            ).execute()
+
+
+            # Aantal maandbladen opslaan
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{main_sheet}!B14",
+                valueInputOption="USER_ENTERED",
+                body={
+                    "values": [[len_monthly_sheets]]
+                }
+            ).execute()
+
+
+            logger.info("Main sheet totals updated")
+            return "Dashboard totals succesvol bijgewerkt"
+
+        except Exception as e:
+            logger.error(f"Error updating totals: {e}")
+            return "Dashboard totals niet kunnen bijwerken"
 
     def _fetch_sheet_meta(self) -> List[Dict]:
         """Single API call — returns the sheets array from spreadsheet metadata."""
@@ -543,7 +689,7 @@ class GoogleSheetsManager:
             # Clear data rows, keep header row
             self.service.spreadsheets().values().clear(
                 spreadsheetId=self.spreadsheet_id,
-                range=f"'{new_name}'!A2:Z"
+                range=f"'{new_name}'!A{self.first_data_row}:Z"
             ).execute()
             # Update cache
             self._known_sheets.discard(copy_name)
@@ -556,6 +702,8 @@ class GoogleSheetsManager:
     # ------------------------------------------------------------------
     # Monthly sheet management
     # ------------------------------------------------------------------
+
+    
 
     def get_or_create_monthly_sheet(self, year: int = None, month: int = None) -> str:
         """
@@ -670,7 +818,7 @@ class GoogleSheetsManager:
         try:
             result = self.service.spreadsheets().values().get(
                 spreadsheetId=self.spreadsheet_id,
-                range=f"'{sheet_name}'!A13:A"
+                range=sheet_range
             ).execute()
 
             values = result.get("values", [])
@@ -704,7 +852,7 @@ class GoogleSheetsManager:
         if not rows:
             return {'total': 0, 'wins': 0, 'losses': 0, 'pending': 0}
 
-        headers = [h.lower().strip() if h else '' for h in rows[0]]
+        headers = [h.lower().strip() if h else '' for h in rows[10]]
         col_idx = {h: i for i, h in enumerate(headers)}
 
         total = 0.0
@@ -712,7 +860,7 @@ class GoogleSheetsManager:
         losses = 0
         pending = 0
 
-        for row in rows[1:]:
+        for row in rows[11:]:
             try:
                 settlement = ''
                 for key in ['settlement', 'status', 'result']:
@@ -736,7 +884,7 @@ class GoogleSheetsManager:
         try:
             result = self.service.spreadsheets().values().get(
                 spreadsheetId=self.spreadsheet_id,
-                range='Settings!A1:B10'
+                range='Dashboard!A1:B10'
             ).execute()
             for row in result.get('values', []):
                 if len(row) >= 2 and row[0].lower() == 'bankroll':
@@ -746,17 +894,44 @@ class GoogleSheetsManager:
         return 1000.0
 
     def update_settlement(self, fixture_id: str, settlement: str,
-                          sheet_name: str = None) -> bool:
-        rows = self.get_all_rows()
-        for i, row in enumerate(rows):
-            if len(row) > 2 and row[2] == fixture_id:
-                headers = [h.lower() if h else '' for h in rows[0]]
-                for j, h in enumerate(headers):
-                    if 'settlement' in h:
-                        return self.update_cell(i, j, settlement, sheet_name)
-                return self.update_cell(i, len(headers), settlement, sheet_name)
-        return False
+                        sheet_name: str = None) -> bool:
 
+        rows = self.get_all_rows(sheet_name)
+
+        header_row = 10  # rij 11 in Sheets
+
+        if len(rows) <= header_row:
+            return False
+
+        headers = [
+            h.lower() if h else ''
+            for h in rows[header_row]
+        ]
+
+        settlement_col = None
+
+        for j, h in enumerate(headers):
+            if 'settlement' in h:
+                settlement_col = j
+                break
+
+        if settlement_col is None:
+            return False
+
+        for i, row in enumerate(rows[header_row + 1:], start=header_row + 1):
+
+            # fixture ID staat in kolom C
+            if len(row) > 2 and row[2] == fixture_id:
+
+                # i is de echte index in rows
+                return self.update_cell(
+                    i,
+                    settlement_col,
+                    settlement,
+                    sheet_name
+                )
+
+        return False
 
 # ---------------------------------------------------------------------------
 # Manual bet entry state machine
@@ -1448,15 +1623,15 @@ class ValueBetScanner:
         self.odds_client.get_settlements(fixture_ids)
         updated = wins = losses = 0
 
+        for i in self.settlements:
+            for bet in self.confirmed_bets:
+                fid = bet['fixture_id']
+                outcome_id = bet['outcome_id']
+                market_id = bet['market_id']
 
-        for bet in self.confirmed_bets:
-            fid = bet['fixture_id']
-            market_id = bet['market_id']
-
-            for i in self.settlements:
                 if fid == i['fixtureId']:
       
-                    result = i.get("markets",{}).get(market_id, {}).get("outcomes", {}).get(market_id, {}).get("players", {}).get("0", {}).get("result", 'UNKNOWN')
+                    result = i.get("markets",{}).get(market_id, {}).get("outcomes", {}).get(outcome_id, {}).get("players", {}).get("0", {}).get("result", 'UNKNOWN')
 
                     status = result.upper()
                     if 'WIN' in status:
@@ -1464,10 +1639,17 @@ class ValueBetScanner:
                     elif 'LOSE' in status:
                         losses += 1
                     if self.sheets:
-                        self.sheets.update_settlement(fid, status)
-                    updated += 1
+                        succes = self.sheets.update_settlement(fid, status)
+                        if succes:
+                            updated += 1
 
         return f"Bijgewerkt: {updated}\nGewonnen: {wins}\nVerloren: {losses}"
+    
+
+    def update_main_sheet_totals(self):
+        """Sum A2:F6 from all MM-YYYY sheets."""
+        self.sheets.update_main_sheet_totals()
+
 
     def scan_once(self) -> List[ValueBet]:
         logger.info("Scanning...")
@@ -1480,24 +1662,35 @@ class ValueBetScanner:
         sport_id = self.config.get('sport_id', 10)
 
         tournaments = self.odds_client.get_tournaments(sport_id)
+        if tournaments is None:
+            logger.info("Stopping scanner due to unforseen problems")
+            self.is_scanning = False
+
         active = [t for t in tournaments
                   if t.get('upcomingFixtures', 0) > 0 or t.get('futureFixtures', 0) > 0]
 
         for tournament in active[:self.config.get('max_tournaments', 10)]:
             if not self.is_scanning:
                 break
-
+            
             fixtures = self.odds_client.get_fixtures(
                 tournament_id=tournament['tournamentId'],
                 sport_id=sport_id,
                 days_ahead=self.config.get('days_ahead', 7)
             )
+            if fixtures is None:
+                logger.info("Stopping scanner due to unforseen problems")
+                self.is_scanning = False
 
             for fixture in fixtures:
                 if not self.is_scanning:
                     break
 
                 odds_data = self.odds_client.get_odds(fixture['fixtureId'])
+                if odds_data is None:
+                    logger.info("Stopping scanner due to unforseen problems")
+                    self.is_scanning = False
+
                 if not odds_data.get('bookmakerOdds'):
                     continue
 
@@ -1557,7 +1750,10 @@ class ValueBetScanner:
                         action = result.get('action')
 
                         if action == 'run' and not self.is_scanning:
+                            msg = self.update_settlements()
+                            self.telegram.send_message(f"*Settlements*\n\n{msg}")
                             self.is_scanning = True
+
                             scan_thread = threading.Thread(
                                 target=self.scan_once, daemon=True
                             )
@@ -1566,6 +1762,7 @@ class ValueBetScanner:
                         elif action == 'stop':
                             self.is_scanning = False
 
+
                         elif action == 'confirm':
                             bet = result.get('bet')
                             if bet:
@@ -1573,7 +1770,9 @@ class ValueBetScanner:
 
                         elif action == 'set':
                             msg = self.update_settlements()
+                            msg_dashboard = self.update_main_sheet_totals()
                             self.telegram.send_message(f"*Settlements*\n\n{msg}")
+                            self.telegram.send_message(msg_dashboard)
 
                 time.sleep(1)
             except KeyboardInterrupt:
@@ -1581,8 +1780,8 @@ class ValueBetScanner:
                 if self.vpn:
                     self.vpn.disconnect()
                 break
-            except Exception as e:
-                logger.error(f"Loop error: {e}")
+            except Exception:
+                logger.exception(f"Loop error")
                 time.sleep(5)
 
     def _log_bet(self, bet: ValueBet):

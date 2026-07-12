@@ -26,7 +26,7 @@
   "google_credentials_path": "credentials.json",
   "google_spreadsheet_id": "1Q2ALPTkGx8SICor1c4cDjZWI5Ewg_OKugvr0yUNY_WQ",
   "min_ev_threshold": 10,
-  "kelly_fraction": 0.25,
+  "kelly_fraction": 0.20,
   "bankroll": 1000,
   "sport_id": 10,
   "max_tournaments": 50,
