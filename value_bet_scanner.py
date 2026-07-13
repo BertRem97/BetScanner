@@ -201,9 +201,12 @@ class OddsPapiClient:
         if params is None:
             params = {}
 
+        api_key = self.key_manager.get_next_key()
+
         count = 0
-        while count < len(self.api_keys):
-            api_key = self.key_manager.get_next_key()
+        MAX_RETRIES = 30
+        while count < MAX_RETRIES:
+           
             params['apiKey'] = api_key
 
             try:
@@ -212,7 +215,7 @@ class OddsPapiClient:
                     params=params,
                     timeout=30
                 )
-                self.key_manager.record_request(api_key)
+              
                 
              
             except requests.RequestException as e:
@@ -232,6 +235,7 @@ class OddsPapiClient:
                 if error == "Forbidden":
                     logger.warning("Forbidden 403 -> rotate IP address")
                     # rotate_ip()
+                    #get_next_key
                     return
             
             if response.status_code == 429:
@@ -249,13 +253,20 @@ class OddsPapiClient:
                 elif error.get("code") == "RATE_LIMITED":
                     logger.info("Rate limit, waiting before making another request")
                     waiting = error.get("retryMs", 1000) / 1000
+                    api_key = self.key_manager.get_next_key()
 
-                    time.sleep(waiting)
+                    #time.sleep(waiting)
+                    continue
+
+                elif error.get("code") == "REQUEST_LIMIT_EXCEEDED":
+                    logger.warning(f"Error fetching data key: {api_key} is drained")
+                    api_key = self.key_manager.get_next_key()
+                    count += 1
+
                     continue
 
                 else:
-                    print(error)
-                    logger.warning(f"Error fetching data {response.url}\nKey{api_key} is drained")
+                    logger.warning(f"Error fetching data {response.url}")
                     self.key_manager.record_error(api_key)
                     count += 1
                     if self.vpn:
@@ -265,6 +276,8 @@ class OddsPapiClient:
                     continue
             
             if response.status_code == 200:
+                api_key = self.key_manager.get_next_key()
+                self.key_manager.record_request(api_key)
                 return response
 
         logger.warning("Problem fetching data")
@@ -919,7 +932,6 @@ class GoogleSheetsManager:
         rows = self.get_all_rows(sheet_name)
 
         header_row = 10  # rij 11 in Sheets
-        print(header_row)
 
         if len(rows) <= header_row:
             return False
@@ -941,7 +953,6 @@ class GoogleSheetsManager:
         for i, row in enumerate(rows[header_row + 1:], start=header_row + 1):
             # fixture ID staat in kolom C
             if len(row) > 2 and row[2] == fixture_id:
-                print(i, settlement_col, settlement, sheet_name)
                 # i is de echte index in rows
                 return self.update_cell(
                     i + 1,
@@ -1665,7 +1676,7 @@ class ValueBetScanner:
                         if succes:
                             if status != "UNKNOWN":
                                 bet['status'] = "closed"
-                                
+
                             updated += 1
 
         return f"Bijgewerkt: {updated}\nGewonnen: {wins}\nVerloren: {losses}"
@@ -1673,7 +1684,7 @@ class ValueBetScanner:
 
     def update_main_sheet_totals(self):
         """Sum A2:F6 from all MM-YYYY sheets."""
-        self.sheets.update_main_sheet_totals()
+        return self.sheets.update_main_sheet_totals()
 
 
     def scan_once(self) -> List[ValueBet]:
