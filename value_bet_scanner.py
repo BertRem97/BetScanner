@@ -862,6 +862,7 @@ class GoogleSheetsManager:
                 body={'values': [[value]]}
             ).execute()
             return True
+        
         except Exception as e:
             logger.error(f"Error updating cell: {e}")
             return False
@@ -936,16 +937,10 @@ class GoogleSheetsManager:
 
         if settlement_col is None:
             return False
-
        
         for i, row in enumerate(rows[header_row + 1:], start=header_row + 1):
-            print('OK')
-            print('LEN ROW:', len(row))
-            print(row)
-
             # fixture ID staat in kolom C
             if len(row) > 2 and row[2] == fixture_id:
-                print('DATAA')
                 print(i, settlement_col, settlement, sheet_name)
                 # i is de echte index in rows
                 return self.update_cell(
@@ -1659,18 +1654,18 @@ class ValueBetScanner:
                     result = i.get("markets",{}).get(market_id, {}).get("outcomes", {}).get(outcome_id, {}).get("players", {}).get("0", {}).get("result", 'UNKNOWN')
 
                     status = result.upper()
-                    print(status)
                     if 'WIN' in status:
                         wins += 1
                     elif 'LOSE' in status:
                         losses += 1
 
                     if self.sheets:
-                        print('yup')
                         succes = self.sheets.update_settlement(fid, status)
 
                         if succes:
-                            bet['status'] = "closed"
+                            if status != "UNKNOWN":
+                                bet['status'] = "closed"
+                                
                             updated += 1
 
         return f"Bijgewerkt: {updated}\nGewonnen: {wins}\nVerloren: {losses}"
