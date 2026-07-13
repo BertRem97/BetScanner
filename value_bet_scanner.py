@@ -251,10 +251,12 @@ class OddsPapiClient:
                     return None
 
                 elif error.get("code") == "RATE_LIMITED":
+                    print(response.text)
                     logger.info("Rate limit, waiting before making another request")
                     waiting = error.get("retryMs", 1000) / 1000
                     api_key = self.key_manager.get_next_key()
-
+                    # rotate_ip()
+          
                     #time.sleep(waiting)
                     continue
 
