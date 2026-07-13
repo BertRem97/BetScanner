@@ -229,14 +229,32 @@ class OddsPapiClient:
                 except ValueError:
                     error = response.text.strip()
 
-
                 if error == "Forbidden":
                     logger.warning("Forbidden 403 -> rotate IP address")
                     # rotate_ip()
-
-                continue
+                    return
             
             if response.status_code == 429:
+                
+                try:
+                    error = response.json().get("error", "")
+                
+                except ValueError:
+                    error = {}
+
+                if error.get("code") == "FIXTURE_NOT_FOUND":
+                    logger.info("No fixtures found")
+                    return None
+
+                elif error.get("code") == "RATE_LIMITED":
+                    logger.info("Rate limit, waiting before making another request")
+                    waiting = error.get("retryMs", 1000) / 1000
+
+                    time.sleep(waiting)
+                    continue
+
+                else:
+                    print(error)
                     logger.warning(f"Error fetching data {response.url}\nKey{api_key} is drained")
                     self.key_manager.record_error(api_key)
                     count += 1
@@ -247,7 +265,7 @@ class OddsPapiClient:
                     continue
             
             if response.status_code == 200:
-                return response.json()
+                return response
 
         logger.warning("Problem fetching data")
         return None
@@ -830,6 +848,7 @@ class GoogleSheetsManager:
 
     def update_cell(self, row: int, col: int, value: str,
                     sheet_name: str = None) -> bool:
+        
         if not self.available:
             return False
         if sheet_name is None:
@@ -838,7 +857,7 @@ class GoogleSheetsManager:
             col_letter = chr(65 + col)
             self.service.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
-                range=f"'{sheet_name}'!{col_letter}{row + self.first_data_row}",
+                range=f"'{sheet_name}'!{col_letter}{row}",
                 valueInputOption='USER_ENTERED',
                 body={'values': [[value]]}
             ).execute()
@@ -899,6 +918,7 @@ class GoogleSheetsManager:
         rows = self.get_all_rows(sheet_name)
 
         header_row = 10  # rij 11 in Sheets
+        print(header_row)
 
         if len(rows) <= header_row:
             return False
@@ -907,7 +927,6 @@ class GoogleSheetsManager:
             h.lower() if h else ''
             for h in rows[header_row]
         ]
-
         settlement_col = None
 
         for j, h in enumerate(headers):
@@ -918,14 +937,19 @@ class GoogleSheetsManager:
         if settlement_col is None:
             return False
 
+       
         for i, row in enumerate(rows[header_row + 1:], start=header_row + 1):
+            print('OK')
+            print('LEN ROW:', len(row))
+            print(row)
 
             # fixture ID staat in kolom C
             if len(row) > 2 and row[2] == fixture_id:
-
+                print('DATAA')
+                print(i, settlement_col, settlement, sheet_name)
                 # i is de echte index in rows
                 return self.update_cell(
-                    i,
+                    i + 1,
                     settlement_col,
                     settlement,
                     sheet_name
@@ -1603,8 +1627,10 @@ class ValueBetScanner:
             'timestamp': bet.timestamp,
             'soft_bookmaker': bet.soft_bookmaker,
             'soft_odds': bet.soft_odds,
-            'stake_amount': bet.stake_amount
+            'stake_amount': bet.stake_amount,
+            'status': 'open'
         }
+
         self.confirmed_bets.append(data)
         with open('confirmed_bets.jsonl', 'a') as f:
             f.write(json.dumps(data) + '\n')
@@ -1629,18 +1655,22 @@ class ValueBetScanner:
                 outcome_id = bet['outcome_id']
                 market_id = bet['market_id']
 
-                if fid == i['fixtureId']:
-      
+                if fid == i['fixtureId'] and bet['status'] == 'open':
                     result = i.get("markets",{}).get(market_id, {}).get("outcomes", {}).get(outcome_id, {}).get("players", {}).get("0", {}).get("result", 'UNKNOWN')
 
                     status = result.upper()
+                    print(status)
                     if 'WIN' in status:
                         wins += 1
                     elif 'LOSE' in status:
                         losses += 1
+
                     if self.sheets:
+                        print('yup')
                         succes = self.sheets.update_settlement(fid, status)
+
                         if succes:
+                            bet['status'] = "closed"
                             updated += 1
 
         return f"Bijgewerkt: {updated}\nGewonnen: {wins}\nVerloren: {losses}"
@@ -1664,7 +1694,10 @@ class ValueBetScanner:
         tournaments = self.odds_client.get_tournaments(sport_id)
         if tournaments is None:
             logger.info("Stopping scanner due to unforseen problems")
+            msg = "Kon data niet ophalen, probeer opnieuw met andere keys of roteer IP adress"
             self.is_scanning = False
+            self.telegram.send_message(msg)
+            return 
 
         active = [t for t in tournaments
                   if t.get('upcomingFixtures', 0) > 0 or t.get('futureFixtures', 0) > 0]
@@ -1679,8 +1712,11 @@ class ValueBetScanner:
                 days_ahead=self.config.get('days_ahead', 7)
             )
             if fixtures is None:
+                msg = "Kon data niet ophalen, probeer opnieuw met andere keys of roteer IP adress"
                 logger.info("Stopping scanner due to unforseen problems")
                 self.is_scanning = False
+                self.telegram.send_message(msg)
+                return 
 
             for fixture in fixtures:
                 if not self.is_scanning:
@@ -1689,7 +1725,10 @@ class ValueBetScanner:
                 odds_data = self.odds_client.get_odds(fixture['fixtureId'])
                 if odds_data is None:
                     logger.info("Stopping scanner due to unforseen problems")
+                    msg = "Kon data niet ophalen, probeer opnieuw met andere keys of roteer IP adress"
                     self.is_scanning = False
+                    self.telegram.send_message(msg)
+                    return 
 
                 if not odds_data.get('bookmakerOdds'):
                     continue
@@ -1758,7 +1797,7 @@ class ValueBetScanner:
                                 target=self.scan_once, daemon=True
                             )
                             scan_thread.start()
-
+                           
                         elif action == 'stop':
                             self.is_scanning = False
 
