@@ -68,6 +68,7 @@ class ApiKeyManager:
         self.key_errors = {key: 0 for key in self.api_keys}
         self.total_requests = 0
         self._lock = threading.Lock()
+    
 
     def get_next_key(self) -> str:
         with self._lock:
@@ -204,7 +205,7 @@ class OddsPapiClient:
         api_key = self.key_manager.get_next_key()
 
         count = 0
-        MAX_RETRIES = 30
+        MAX_RETRIES = 1000
         while count < MAX_RETRIES:
            
             params['apiKey'] = api_key
@@ -215,9 +216,7 @@ class OddsPapiClient:
                     params=params,
                     timeout=30
                 )
-              
-                
-             
+            
             except requests.RequestException as e:
                 self.key_manager.record_error(api_key)
                 logger.warning(f"Connection error with key {api_key}: {e}")
@@ -254,17 +253,21 @@ class OddsPapiClient:
                     print(response.text)
                     logger.info("Rate limit, waiting before making another request")
                     waiting = error.get("retryMs", 1000) / 1000
+
                     api_key = self.key_manager.get_next_key()
                     # rotate_ip()
           
-                    #time.sleep(waiting)
+                    time.sleep(waiting)
                     continue
 
                 elif error.get("code") == "REQUEST_LIMIT_EXCEEDED":
                     logger.warning(f"Error fetching data key: {api_key} is drained")
+                    #if self.refresh_api_key(api_key):
+                        #logger.info("Retrying with refreshed key")
+                        #continue
+
                     api_key = self.key_manager.get_next_key()
                     count += 1
-
                     continue
 
                 else:
@@ -284,7 +287,26 @@ class OddsPapiClient:
 
         logger.warning("Problem fetching data")
         return None
+    
+    def refresh_api_key(self, api_key: str) -> bool:
+        try:
+            response = self.session.post(
+                f"{self.BASE_URL}/account/refresh-api-key",
+                params={"apiKey": api_key},
+                timeout=30
+            )
 
+            if response.status_code == 200:
+                logger.info(f"API key {api_key} refreshed")
+                return True
+
+            logger.warning(f"Failed to refresh {api_key}: {response.text}")
+            return False
+
+        except requests.RequestException as e:
+            logger.warning(f"Error refreshing API key: {e}")
+            return False
+    
     def get_key_status(self) -> Dict:
         return self.key_manager.get_status()
 
@@ -830,6 +852,7 @@ class GoogleSheetsManager:
         if sheet_name is None:
             sheet_name = self.get_or_create_monthly_sheet()
         try:
+            print(self.first_data_row)
             self.service.spreadsheets().values().append(
                 spreadsheetId=self.spreadsheet_id,
                 range=f"'{sheet_name}'!A{self.first_data_row}",
