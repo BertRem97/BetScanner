@@ -177,13 +177,13 @@ class OddsPapiClient:
     OUTCOME_AWAY = "103"
 
     SOFT_BOOKMAKERS = [
-        'cashpoint', 'unibet', 'betano', 'ladbrokes',
+        'cashpoint', 'unibet', 'pinnacle', 'ladbrokes.be',
         'bcgame', 'bwin.be'
     ]
 
     # Sharp books used only for median reference, NOT as bet targets
     SHARP_BOOKMAKERS = [
-        'pinnacle', 'betfair', 'sbobet'
+        'pinnacle', 'betfair', 'sbobet', 'bet365.com'
     ]
 
     def __init__(self, api_keys, settlements, requests_per_key: int = 250, vpn: 'SurfsharkVPN' = None):
@@ -515,6 +515,7 @@ class GoogleSheetsManager:
             logger.info("Google Sheets client initialized")
         except Exception as e:
             logger.error(f"Error initializing Google Sheets: {e}")
+
 
     # ------------------------------------------------------------------
     # Low-level helpers
