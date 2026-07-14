@@ -211,12 +211,23 @@ class OddsPapiClient:
             )
             self.key_manager.record_request(api_key)
             if response.status_code == 429:
-
                 self.key_manager.record_error(api_key)
-                if self.vpn:
-                    # Force an immediate server rotation on rate-limit
-                    self.vpn.connect()
+                
                 return self._make_request(endpoint, params)
+            
+            if response.status_code == 403:
+
+                try:
+                    error = response.json().get("error", "")
+                except ValueError:
+                    error = response.text.strip()
+
+                if error == "Forbidden":
+                    logger.warning("Forbidden 403 -> rotate IP address")
+   
+                    if self.vpn:
+                        self.vpn.connect()
+
             return response
         except Exception as e:
             self.key_manager.record_error(api_key)
@@ -1031,7 +1042,6 @@ class SurfsharkVPN:
     DEFAULT_SERVERS = [
         'nl-ams',
         'de-fra',
-        'gb-lon',
         'fr-par',
         'be-bru',
         'at-vie',
@@ -1059,7 +1069,7 @@ class SurfsharkVPN:
     # ------------------------------------------------------------------
 
     def _run(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
-        cmd = ['sudo', './rotate_vpn_on_call'] + list(args)
+        cmd = ['sudo', '/home/pi/services/BetScanner/rotate_vpn_on_call.sh'] + list(args)
         logger.debug(f"VPN cmd: {' '.join(cmd)}")
         return subprocess.run(
             cmd,
@@ -1753,7 +1763,7 @@ class ValueBetScanner:
             return
 
         self.telegram.send_message(
-            "*Value Bet Scanner Gestart*\n\nGebruik /run om de scanner te starten\n/help voor alle commando's"
+            "*Value Bet Scanner Gestart*\n\nGebruik /run om de scanner te starten\n/help voor alle commando's\nGebruik /set om settlements bij te werken"
         )
 
         scan_thread = None
@@ -1767,7 +1777,7 @@ class ValueBetScanner:
 
                         if action == 'run' and not self.is_scanning:
                             logger.info("Updateing settlements")
-                            self.telegram.send_message("Updateing settlements")
+                            self.telegram.send_message("Settlements bijwerken...")
                             msg = self.update_settlements()
                             self.telegram.send_message(f"*Settlements*\n\n{msg}")
                             self.is_scanning = True
