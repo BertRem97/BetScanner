@@ -195,98 +195,32 @@ class OddsPapiClient:
 
 
     def _make_request(self, endpoint: str, params: Dict = None) -> requests.Response:
-        
         if self.vpn:
             self.vpn.maybe_rotate()
 
+        api_key = self.key_manager.get_next_key()
         if params is None:
             params = {}
+        params['apiKey'] = api_key
 
-        api_key = self.key_manager.get_next_key()
-
-        count = 0
-        MAX_RETRIES = 1000
-        while count < MAX_RETRIES:
-           
-            params['apiKey'] = api_key
-
-            try:
-                response = self.session.get(
-                    f"{self.BASE_URL}/{endpoint}",
-                    params=params,
-                    timeout=30
-                )
-            
-            except requests.RequestException as e:
-                self.key_manager.record_error(api_key)
-                logger.warning(f"Connection error with key {api_key}: {e}")
-                count += 1
-                continue
-
-            if response.status_code == 403:
-                count += 1
-
-                try:
-                    error = response.json().get("error", "")
-                except ValueError:
-                    error = response.text.strip()
-
-                if error == "Forbidden":
-                    logger.warning("Forbidden 403 -> rotate IP address")
-                    # rotate_ip()
-                    #get_next_key
-                    return
-            
+        try:
+            response = self.session.get(
+                f"{self.BASE_URL}/{endpoint}",
+                params=params,
+                timeout=30
+            )
+            self.key_manager.record_request(api_key)
             if response.status_code == 429:
-                
-                try:
-                    error = response.json().get("error", "")
-                
-                except ValueError:
-                    error = {}
 
-                if error.get("code") == "FIXTURE_NOT_FOUND":
-                    logger.info("No fixtures found")
-                    return None
-
-                elif error.get("code") == "RATE_LIMITED":
-                    print(response.text)
-                    logger.info("Rate limit, waiting before making another request")
-                    waiting = error.get("retryMs", 1000) / 1000
-
-                    api_key = self.key_manager.get_next_key()
-                    # rotate_ip()
-          
-                    time.sleep(waiting)
-                    continue
-
-                elif error.get("code") == "REQUEST_LIMIT_EXCEEDED":
-                    logger.warning(f"Error fetching data key: {api_key} is drained")
-                    #if self.refresh_api_key(api_key):
-                        #logger.info("Retrying with refreshed key")
-                        #continue
-
-                    api_key = self.key_manager.get_next_key()
-                    count += 1
-                    continue
-
-                else:
-                    logger.warning(f"Error fetching data {response.url}")
-                    self.key_manager.record_error(api_key)
-                    count += 1
-                    if self.vpn:
-                        # Force an immediate server rotation on rate-limit
-                        self.vpn.connect()
-
-                    continue
-            
-            if response.status_code == 200:
-                api_key = self.key_manager.get_next_key()
-                self.key_manager.record_request(api_key)
-                return response
-
-        logger.warning("Problem fetching data")
-        return None
+                self.key_manager.record_error(api_key)
+                if self.vpn:
+                    # Force an immediate server rotation on rate-limit
+                    self.vpn.connect()
+                return self._make_request(endpoint, params)
+            return response
+        except Exception as e:
+            self.key_manager.record_error(api_key)
+            raise
     
     def refresh_api_key(self, api_key: str) -> bool:
         try:
@@ -938,18 +872,18 @@ class GoogleSheetsManager:
 
     def get_bankroll(self) -> float:
         if not self.available:
-            return 1000.0
+            return 500
         try:
             result = self.service.spreadsheets().values().get(
                 spreadsheetId=self.spreadsheet_id,
-                range='Dashboard!A1:B10'
+                range='Dashboard!A1:B20'
             ).execute()
             for row in result.get('values', []):
                 if len(row) >= 2 and row[0].lower() == 'bankroll':
                     return float(row[1])
         except Exception:
             pass
-        return 1000.0
+        return 500
 
     def update_settlement(self, fixture_id: str, settlement: str,
                         sheet_name: str = None) -> bool:
@@ -1013,13 +947,23 @@ class ManualBetSession:
     def __init__(self):
         self.step_index = 0
         self.data: Dict[str, str] = {}
+        
 
     @property
     def current_step(self) -> Optional[Tuple[str, str]]:
         if self.step_index < len(MANUAL_STEPS):
             return MANUAL_STEPS[self.step_index]
         return None
+    
 
+    def calculate_stake(self, probability: float, odds: float, bankroll: float,
+                    fraction: float = 0.25) -> Tuple[float, float]:
+        
+        full_kelly = self.calculate_kelly(probability, odds)
+        fractional_kelly = full_kelly * fraction
+        stake_amount = bankroll * fractional_kelly
+        return stake_amount, fractional_kelly
+    
     def record_answer(self, answer: str):
         key, _ = MANUAL_STEPS[self.step_index]
         self.data[key] = answer.strip()
@@ -1036,7 +980,7 @@ class ManualBetSession:
         p2 = parts[1].strip() if len(parts) > 1 else ''
         soft_odds = float(d['soft_odds'])
         sharp_odds = float(d['sharp_odds'])
-        stake = float(d['stake'])
+        stake = self.calculate_stake()
         win_prob = 1 / sharp_odds if sharp_odds > 0 else 0
         ev = ((win_prob * soft_odds) - 1) * 100
         kelly = stake / bankroll if bankroll > 0 else 0
@@ -1442,7 +1386,7 @@ class TelegramBot:
             return {'action': 'manueel_step'}
 
         # All answers collected — build the bet
-        bankroll = self.sheets.get_bankroll() if self.sheets else 1000.0
+        bankroll = self.sheets.get_bankroll() if self.sheets else 500
         try:
             bet = session.to_value_bet(bankroll)
         except (ValueError, KeyError) as e:
@@ -1588,6 +1532,7 @@ class ValueBetScanner:
         if not api_keys:
             single = config.get('oddspapi_key', '')
             api_keys = [single] if single else []
+
 
         if not api_keys or not api_keys[0]:
             raise ValueError("No API keys configured")
@@ -1820,6 +1765,8 @@ class ValueBetScanner:
                         action = result.get('action')
 
                         if action == 'run' and not self.is_scanning:
+                            logger.info("Updateing settlements")
+                            self.telegram.send_message("Updateing settlements")
                             msg = self.update_settlements()
                             self.telegram.send_message(f"*Settlements*\n\n{msg}")
                             self.is_scanning = True
@@ -1883,6 +1830,7 @@ def load_config(path: str = 'config.json') -> Dict:
 
     if Path(path).exists():
         config = json.load(open(path))
+   
     
     else:
         keys_str = os.getenv('ODDSPAPI_KEYS', os.getenv('ODDSPAPI_KEY', ''))
