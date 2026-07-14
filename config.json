@@ -1,23 +1,46 @@
 {
-  "oddspapi_keys": [
-    "dc6101bc-b007-451c-8ad3-a455bca5e662", "369e0c5a-ec63-44fc-93ef-d6b7d4af0e5e",
-    "ca43f14e-8ef2-4828-a39d-436a02d053cb", "fd6357fb-7baa-4dca-876b-3357c4829aa7",
-    "e7df2c08-793e-42f8-bbec-c6f0a5127e2e", "946fe035-a86f-4108-8e94-dc97b643969b",
-    "5129271c-9e28-4e59-85aa-40ec629d561a", "fee43071-00e8-49b0-bc47-b46648a07b71",
-    "4eec8c5e-d7f5-47cb-ab2d-daf6c01428f5", "464ef8c1-1e44-47e9-8b2e-477d285b9a9d",
-    "e64b8ebc-1584-40b6-9749-1f32f4261c35", "9dc7b006-cb67-4924-86d8-8e237d1f0667",
-    "2ed351b5-1c2c-458c-96e0-c818505a7ae5", "2f783825-88ae-4b60-88ff-f74cf14dd4b4",
-    "d74913d5-9a18-430d-ab56-1d7b009cca0d", "6e3bd259-c63c-4259-8fab-b89970d7ca7f",
-    "ad33a6db-2525-4707-8ced-702b4dc52d25", "8f47edbf-4223-41a6-846e-4d1675ee1f23",
-    "a0466b70-657a-4183-9d2c-f8b4012c6380", "3ef0fbe1-0d02-47e7-939e-ca85314541b4",
-    "6feefbad-365a-401d-b36e-62984a778cdd", "14bbad9e-0fc3-4582-a402-06b77713137b",
-    "f5f5333a-af35-4b14-9f22-5a72533e88a5", "fa9f885d-2d14-4003-950a-bb6dcf082704",
-    "a4985762-5d41-449c-9fa7-466e049592ad", "82d21cb0-bd3f-40be-b72d-00fe2d772c1a",
-    "d482161a-ade7-4d30-8f04-c3e39692be82", "26729149-3dca-47c6-b129-0dec5ce96b1e",
-    "04c52afe-bf59-4503-8904-624338611ece", "79d69b80-4084-4383-b5a5-1ab5809d277c",
-    "79d69b80-4084-4383-b5a5-1ab5809d277c", "79d69b80-4084-4383-b5a5-1ab5809d277c"
-
-                 
+  "oddspapi_keys": ["0c7870de-8007-472a-8ba4-6f47f577b26a", "4e15aaee-b6ba-41ed-9ff8-66844d4b70a4",
+  "0418023f-562a-431e-9032-759d20931d73", "506bfcd6-7b87-496f-82ea-b8395b85df97",
+  "83374ae4-8a8b-4749-b21c-407ebeb2faa4", "2f049aab-bfa5-4887-a30f-1882657aa04b",
+  "35e9879c-910e-497d-ad94-423dfb494f6a", "e94e20ad-0f85-4259-bfcd-29deec04efde",
+  "5488d7e4-40a6-48b6-a464-a599ca78545f", "eb5e02bf-58a9-4f20-aef5-1c314818d533", 
+  "b069c0b7-197e-4c17-aa2d-a59f2d98a232", "0fbdb8a5-c75d-4283-9ae0-4cae863716b2",
+  "544e7d93-cbc7-4b06-9c16-7ba6a1ea730b", "5d9f0891-bba5-4b80-98ae-09cc0190c100", 
+  "09c5dda4-dd00-4294-8893-5c2d53d7d8c7", "b85474f3-390e-4bc3-9182-3f1a26d67bb8",
+  "2f247ff8-e447-40c1-91eb-b2e987439915", "c281b483-7f0e-4d78-9991-de7397a4ce79",
+  "c281b483-7f0e-4d78-9991-de7397a4ce79", "34a366f4-f7ec-4c71-80bc-e47052ef9228",
+  "766e30be-f989-41ed-a855-9862c0c560a0", "766e30be-f989-41ed-a855-9862c0c560a0",
+  "00b49654-6140-4edf-93aa-3dfb9eec7beb", "d1765e05-1eba-4451-8b8e-ba0d5dba287d",
+  "c0237866-e357-4568-a1a9-fae60d73894c", "c0237866-e357-4568-a1a9-fae60d73894c",
+  "a44e2cd8-3deb-4717-9065-8ca5c4f478b0", "511fb03f-4fe1-4d99-b48a-889e310b0f5e",
+  "ad22057e-dd6d-4b2f-ac43-0ed2ae0aff68", "236f512b-829e-4f9e-8d6f-d21561dded17",
+  "7d59bd41-615f-40e0-9ca6-7c2476e90ec2", "46b8052f-0a63-494a-aeaa-42a2ba44b6f7",
+  "50cbb570-f15b-4935-9ceb-59c95526ba59", "2146092e-7e38-4e73-9938-eaa6ccfb4208",
+  "09d90fa6-e974-4d14-ac9b-a80297d4cfd0", "0f41819b-c300-4439-8785-4dea17796eaa",
+  "8e53c1f7-cd67-4a61-b2fc-98cbff3eb2f0", "2a32d407-7bd7-48ac-85d4-0f2f88edbe94",
+  "5602b701-5a69-4e31-a85e-d701642e4930", "1d82add9-cdb7-4f52-b62c-8e1c45e87814",
+  "48ef4483-ef4a-49ec-86fd-b7dd562a956a", "bef23f9d-ef98-4ee5-9f1f-92c77c432cb7",
+  "749143c8-9806-4655-80af-3e7e0330108e", "c467faf4-1c92-4a4b-85f7-18f9495a1149",
+  "c467faf4-1c92-4a4b-85f7-18f9495a1149", "8b242f11-491a-4da6-947d-a7c6be3bbfa0",
+  "4f06a568-3691-4a1a-8fe9-9fd82d51da96", "75ef795d-674f-4909-92a9-565985fcbd60",
+  "9f29b83d-cb43-4b46-852e-5b45fd68dffd", "7fae4421-7a13-4042-9be8-0b59017a798d",
+  "7fae4421-7a13-4042-9be8-0b59017a798d", "2b1a7a10-e976-4c3e-b6ea-6fa5d870345f",
+  "5d15508e-0299-42c8-9ae2-ffebebc7d19e", "5d15508e-0299-42c8-9ae2-ffebebc7d19e",
+  "6fdc7c78-bbec-4758-a2b5-a59e50dab05a", "18dc52c6-bbf9-4cfb-8fba-268e44b2d608",
+  "119ab89a-34ea-4ffa-9edc-f792afcc69a2", "8a0676da-d7e6-46ea-b121-41089bb744ae",
+  "3219c3c3-41d6-41ee-91d1-af70a9698054", "65474da8-d725-4f29-b924-793b0cc06296",
+  "44bbbfaf-8520-4ba8-a6bb-a0062dc65431", "05f9fc49-54d8-496f-b64d-44093fc5e757",
+  "194a3ffd-99a8-42f9-8878-b37b0f6b06a0", "ed42f863-c507-4765-a3dc-264f681624d4",
+  "3aa95ee0-976e-447d-b3b1-16ddba587b3b", "d15eb940-ad3f-4d30-bb4e-0c87a8793608",
+  "4fae4be3-14bd-4f7e-8043-899938fa9920", "e99f8e95-14b6-454e-acb9-2fbdcc0aa44f",
+  "474e50d9-1021-4dbb-9db2-f61b65f352fd", "37dae07e-959b-4712-bd7a-883dcddb26cd",
+  "480dc7ba-5aab-455e-a288-d7356cb66d87", "6beaf89d-6698-4d22-ab7e-2a1e388bef3b",
+  "61ddfe8e-4d09-4564-a3b6-f679b41e568b", "1cc89995-76d3-4f52-b1db-90a8ea40e6d7",
+  "3665287d-8e3a-4b02-83f9-792d9ba8eeb3", "aecb9fe4-a2ad-4921-8d31-2a15f99b005e",
+  "cabd25b7-bf8d-4fbd-8cde-0ed67b6279b4", "0ebe2b74-89b7-410b-9ca5-b23f8abb2f28",
+  "6fe584c9-1cab-4883-984e-2847d631be60", "a719e6d8-c103-44a1-a676-fe401e702e18",
+  "4c5cedab-0b4b-4004-8b45-57e5090ff86c", "4f1a783d-4126-460e-94a3-159e898805cc",
+  "ae7dc86f-d715-4ca2-874f-3bbe68a79b8b", "113e614c-686f-4828-818a-15bce7c904c0"
   ],
 
   "requests_per_key": 250,
@@ -29,7 +52,7 @@
   "kelly_fraction": 0.20,
   "bankroll": 1000,
   "sport_id": 10,
-  "max_tournaments": 50,
+  "max_tournaments": 20,
   "days_ahead": 30,
   "request_delay": 1.0,
   "scan_interval": 300,
@@ -47,5 +70,6 @@
       "us-nyc"
     ]
   },
-  "_comment": "kelly_fraction 0.25 = quarter Kelly, 0.5 = half Kelly. VPN: set enabled=true on Raspberry Pi with Surfshark installed."
+  "_comment": "kelly_fraction 0.25 = quarter Kelly, 0.5 = half Kelly. VPN: set enabled=true on Raspberry Pi with Surfshark installed. Drained_Keys: 79d69b80-4084-4383-b5a5-1ab5809d277c, dc6101bc-b007-451c-8ad3-a455bca5e662, 369e0c5a-ec63-44fc-93ef-d6b7d4af0e5e,"
+  
 }
