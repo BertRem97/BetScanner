@@ -44,7 +44,12 @@
   "67faddaf-c0f8-4cd7-a826-5a5426f78583", "975ffa65-4cd9-4a22-acde-8e2870ba3521",
   "c3fc4497-07f3-4374-9952-6fc9e96796e3", "bbfc9f98-be93-4909-affc-3683ea7a6d88",
   "f486a8eb-a160-4fc0-8aa8-c85ebf8a6655", "5aa58f06-d8ec-4585-8162-2ed012bfdfc2",
-  "2539e4b4-b472-4e70-ac65-a562fe2563ab"
+  "2539e4b4-b472-4e70-ac65-a562fe2563ab", "20cc6f1c-7a45-4f35-94e9-c65963e63bb3",
+  "34bccab0-2a67-409c-9b12-e3f9445a17da", "ab1c36a7-7ef9-43aa-b307-27eb7e119344",
+  "797f82a2-fb6a-4fc1-bbd0-68d64c42aaca", "3b85ad8e-f0e4-45b3-bc20-2c7d5957eb0b",
+  "77445a48-893f-4ebb-aa04-adc0f51c4ec9", "213d2ab0-1371-43fe-a03f-d9d118c4123c",
+  "893e2797-c7eb-4f7b-b7c9-8219b95e01c4", "81342b0f-fafd-4cfd-aeb5-0010f63f208f",
+  "642aa604-c774-48c7-8489-112f489fd531", "ca4434e9-8374-4c79-98d4-befd3ab00832"
 
   
   ],
@@ -68,12 +73,8 @@
     "servers": [
       "nl-ams",
       "de-fra",
-      "gb-lon",
       "fr-par",
-      "be-bru",
-      "at-vie",
-      "se-sto",
-      "us-nyc"
+      "be-bru"
     ]
   },
   "_comment": "kelly_fraction 0.25 = quarter Kelly, 0.5 = half Kelly. VPN: set enabled=true on Raspberry Pi with Surfshark installed. Drained_Keys: 79d69b80-4084-4383-b5a5-1ab5809d277c, dc6101bc-b007-451c-8ad3-a455bca5e662, 369e0c5a-ec63-44fc-93ef-d6b7d4af0e5e,"

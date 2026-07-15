@@ -186,17 +186,41 @@ class OddsPapiClient:
         'pinnacle', 'betfair', 'sbobet', 'bet365.com'
     ]
 
-    def __init__(self, api_keys, settlements, requests_per_key: int = 250, vpn: 'SurfsharkVPN' = None):
+    def __init__(self, api_keys, settlements, requests_per_key: int = 250):
         self.key_manager = ApiKeyManager(api_keys, requests_per_key)
         self.session = requests.Session()
-        self.vpn = vpn
         self.settlements = settlements
         self.api_keys = api_keys
 
 
+    def rotate_ip(self):
+        try:
+            subprocess.run(
+                ["bash", "/home/pi/services/BetScanner/rotate_vpn_on_call.sh"],
+                check=True
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"VPN-script faalde: {e}")
+        except KeyboardInterrupt:
+            print("Programma onderbroken door gebruiker")
+
+        while True:
+            try:
+                response = requests.get(
+                    "https://api.oddspapi.io/v4",
+                    timeout=5
+                )
+        
+                if response.status_code < 500:  
+                    return True
+                
+            except requests.exceptions.RequestException:
+                pass
+
+            time.sleep(2) 
+
+
     def _make_request(self, endpoint: str, params: Dict = None) -> requests.Response:
-        if self.vpn:
-            self.vpn.maybe_rotate()
 
         api_key = self.key_manager.get_next_key()
         if params is None:
@@ -224,33 +248,15 @@ class OddsPapiClient:
 
                 if error == "Forbidden":
                     logger.warning("Forbidden 403 -> rotate IP address")
-   
-                    if self.vpn:
-                        self.vpn.connect()
+                    
+                    self.rotate_ip()
+                    return self._make_request(endpoint, params)
 
             return response
         except Exception as e:
             self.key_manager.record_error(api_key)
             raise
     
-    def refresh_api_key(self, api_key: str) -> bool:
-        try:
-            response = self.session.post(
-                f"{self.BASE_URL}/account/refresh-api-key",
-                params={"apiKey": api_key},
-                timeout=30
-            )
-
-            if response.status_code == 200:
-                logger.info(f"API key {api_key} refreshed")
-                return True
-
-            logger.warning(f"Failed to refresh {api_key}: {response.text}")
-            return False
-
-        except requests.RequestException as e:
-            logger.warning(f"Error refreshing API key: {e}")
-            return False
     
     def get_key_status(self) -> Dict:
         return self.key_manager.get_status()
@@ -269,6 +275,7 @@ class OddsPapiClient:
     def get_tournaments(self, sport_id: int = 10) -> List[Dict]:
         try:
             response = self._make_request("tournaments", {'sportId': sport_id})
+            print(response)
             if response is None:
                 return None
             response.raise_for_status()
@@ -360,8 +367,9 @@ class OddsPapiClient:
         bookmaker_outcome_id = player_0.get('bookmakerOutcomeId', '')
 
         if bookmaker_outcome_id:
-            return f"{fixture_path}#{bookmaker_outcome_id}"
-        return fixture_path
+            return player_0.get('betslip', None)
+        
+        return None
 
 
 class ValueBetCalculator:
@@ -884,6 +892,7 @@ class GoogleSheetsManager:
 
     def get_bankroll(self) -> float:
         if not self.available:
+            print("NOT AVAILABLE")
             return 500
         try:
             result = self.service.spreadsheets().values().get(
@@ -892,6 +901,7 @@ class GoogleSheetsManager:
             ).execute()
             for row in result.get('values', []):
                 if len(row) >= 2 and row[0].lower() == 'bankroll':
+                    print(row)
                     return float(row[1])
         except Exception:
             pass
@@ -1024,117 +1034,6 @@ class ManualBetSession:
             betslip_url=betslip,
             settlement_status='PENDING'
         )
-
-
-class SurfsharkVPN:
-    """
-    Controls Surfshark VPN on a Raspberry Pi (Linux) via the official
-    surfshark-vpn CLI.  Requires Surfshark to be installed and authenticated:
-        sudo apt-get install surfshark-vpn
-        surfshark-vpn auth   (first time only)
-
-    Country codes come from `surfshark-vpn server list` — use the short ID
-    column, e.g. 'us-nyc', 'nl-ams', 'de-ber'.
-    """
-
-    # A selection of European + US servers that are reliably available.
-    # Adjust to taste or to what `surfshark-vpn server list` shows on your Pi.
-    DEFAULT_SERVERS = [
-        'nl-ams',
-        'de-fra',
-        'fr-par',
-        'be-bru',
-        'at-vie',
-        'se-sto',
-        'us-nyc',
-    ]
-
-    def __init__(self, servers: List[str] = None,
-                 rotate_every: int = 10,
-                 enabled: bool = True):
-        """
-        :param servers:      List of Surfshark server IDs to rotate through.
-        :param rotate_every: Rotate after this many API requests.
-        :param enabled:      Set False to run without VPN (useful in dev).
-        """
-        self.servers = servers or self.DEFAULT_SERVERS
-        self.rotate_every = rotate_every
-        self.enabled = enabled
-        self._request_count = 0
-        self._current_server: Optional[str] = None
-        self._lock = threading.Lock()
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    def _run(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
-        cmd = ['sudo', '/home/pi/services/BetScanner/rotate_vpn_on_call.sh'] + list(args)
-        logger.debug(f"VPN cmd: {' '.join(cmd)}")
-        return subprocess.run(
-            cmd,
-            capture_output=True, text=True,
-            timeout=60, check=check
-        )
-
-    def _is_connected(self) -> bool:
-        try:
-            result = self._run('status', check=False)
-            return 'connected' in result.stdout.lower()
-        except Exception:
-            return False
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
-    def connect(self, server: str = None) -> bool:
-        if not self.enabled:
-            return True
-        target = server or random.choice(self.servers)
-        try:
-            if self._is_connected():
-                self._run('disconnect', check=False)
-                time.sleep(3)
-            self._run('connect', target)
-            self._current_server = target
-            logger.info(f"VPN connected: {target}")
-            return True
-        except subprocess.CalledProcessError as e:
-            logger.error(f"VPN connect failed ({target}): {e.stderr.strip()}")
-            return False
-        except Exception as e:
-            logger.error(f"VPN error: {e}")
-            return False
-
-    def disconnect(self):
-        if not self.enabled:
-            return
-        try:
-            self._run('disconnect', check=False)
-            self._current_server = None
-            logger.info("VPN disconnected")
-        except Exception as e:
-            logger.error(f"VPN disconnect error: {e}")
-
-    def maybe_rotate(self):
-        """Call this before each API request; rotates server every N requests."""
-        if not self.enabled:
-            return
-        with self._lock:
-            self._request_count += 1
-            if self._request_count % self.rotate_every == 0:
-                next_server = random.choice(
-                    [s for s in self.servers if s != self._current_server] or self.servers
-                )
-                logger.info(f"VPN rotation #{self._request_count // self.rotate_every}: {self._current_server} -> {next_server}")
-                self.connect(next_server)
-
-    @property
-    def status(self) -> str:
-        if not self.enabled:
-            return 'disabled'
-        return self._current_server or 'disconnected'
 
 
 class TelegramBot:
@@ -1350,7 +1249,6 @@ class TelegramBot:
             '/set':      lambda: {'action': 'set'},
             '/manueel':  lambda: self._cmd_manueel(chat_id),
             '/annuleer': lambda: self._cmd_annuleer(chat_id),
-            '/vpn':      lambda: self._cmd_vpn(text),
             '/help':     self._cmd_help,
         }
 
@@ -1479,41 +1377,6 @@ class TelegramBot:
             self.send_message("Google Sheets niet geconfigureerd")
         return {'action': 'bankroll'}
 
-    def _cmd_vpn(self, text: str) -> Dict:
-        vpn: Optional[SurfsharkVPN] = None
-        if self._scanner and hasattr(self._scanner, 'vpn'):
-            vpn = self._scanner.vpn
-
-        if vpn is None or not vpn.enabled:
-            self.send_message("*VPN*\n\nNiet geconfigureerd of uitgeschakeld.")
-            return {'action': 'vpn'}
-
-        parts = text.split()
-        sub = parts[1].lower() if len(parts) > 1 else 'status'
-
-        if sub == 'status':
-            self.send_message(f"*VPN status*\n\n{vpn.status}")
-
-        elif sub == 'rotate':
-            server = parts[2] if len(parts) > 2 else None
-            ok = vpn.connect(server)
-            msg = f"Verbonden: {vpn.status}" if ok else "Rotatie mislukt"
-            self.send_message(f"*VPN rotatie*\n\n{msg}")
-
-        elif sub == 'off':
-            vpn.disconnect()
-            self.send_message("*VPN*\n\nVerbroken.")
-
-        else:
-            self.send_message(
-                "*VPN commando's*\n\n"
-                "/vpn status\n"
-                "/vpn rotate [server]\n"
-                "/vpn off"
-            )
-
-        return {'action': 'vpn'}
-
     def _cmd_help(self) -> Dict:
         self.send_message(
             "*Beschikbare commando's*\n\n"
@@ -1525,7 +1388,6 @@ class TelegramBot:
             "/keys - API key gebruik\n"
             "/bankroll - Bankroll weergeven\n"
             "/set - Settlements bijwerken\n"
-            "/vpn status|rotate|off - VPN beheer\n"
             "/help - Dit overzicht"
         )
         return {'action': 'help'}
@@ -1548,20 +1410,9 @@ class ValueBetScanner:
         if not api_keys or not api_keys[0]:
             raise ValueError("No API keys configured")
 
-        # VPN setup (optional)
-        vpn_cfg = config.get('vpn', {})
-        self.vpn: Optional[SurfsharkVPN] = None
-        if vpn_cfg.get('enabled', False):
-            self.vpn = SurfsharkVPN(
-                servers=vpn_cfg.get('servers', None),
-                rotate_every=vpn_cfg.get('rotate_every', 10),
-                enabled=True
-            )
-            self.vpn.connect()
-            logger.info(f"VPN initialised — server: {self.vpn.status}")
 
         self.odds_client = OddsPapiClient(
-            api_keys, self.settlements, config.get('requests_per_key', 250), vpn=self.vpn, 
+            api_keys, self.settlements, config.get('requests_per_key', 250), 
         )
         logger.info(f"Initialized with {len(api_keys)} API key(s)")
 
@@ -1625,7 +1476,7 @@ class ValueBetScanner:
     def get_bankroll(self) -> float:
         if self.sheets:
             return self.sheets.get_bankroll()
-        return float(self.config.get('bankroll', 1000.0))
+        return float(self.config.get('bankroll', 500))
 
     def update_settlements(self) -> str:
         if not self.confirmed_bets:
@@ -1723,9 +1574,11 @@ class ValueBetScanner:
                 bets = self.calculator.analyze_fixture(fixture, odds_data, bankroll)
                 for bet in bets:
                     key = f"{bet.fixture_id}_{bet.soft_bookmaker}_{bet.outcome_id}"
-                    if key not in self.seen_bets:
-                        value_bets.append(bet)
-                        self.seen_bets.add(key)
+                    value_bets.append(bet)
+
+                    #if key not in self.seen_bets:
+                        #value_bets.append(bet)
+                        #self.seen_bets.add(key)
 
                 time.sleep(self.config.get('request_delay', 1))
 
@@ -1741,21 +1594,6 @@ class ValueBetScanner:
             else:
                 self._log_bet(bet)
     
-
-    def run_continuous(self):
-        self.is_scanning = True
-        while self.is_scanning:
-            try:
-                self.scan_once()
-            
-                for _ in range(self.config.get('scan_interval', 300)):
-                    if not self.is_scanning:
-                        break
-                    time.sleep(1)
-            except Exception as e:
-                logger.error(f"Scan error: {e}")
-                time.sleep(60)
-
 
     def run_interactive(self):
         if not self.telegram:
@@ -1805,8 +1643,6 @@ class ValueBetScanner:
                 time.sleep(1)
             except KeyboardInterrupt:
                 self.is_scanning = False
-                if self.vpn:
-                    self.vpn.disconnect()
                 break
             except Exception:
                 logger.exception(f"Loop error")
@@ -1862,13 +1698,7 @@ def load_config(path: str = 'config.json') -> Dict:
         config.setdefault('scan_interval', int(os.getenv('SCAN_INTERVAL', '300')))
         config.setdefault('requests_per_key', int(os.getenv('REQUESTS_PER_KEY', '250')))
 
-        # VPN config from env (merges with any 'vpn' block already in config.json)
-        vpn_cfg = config.setdefault('vpn', {})
-        vpn_cfg.setdefault('enabled', os.getenv('VPN_ENABLED', 'false').lower() == 'true')
-        servers_env = os.getenv('VPN_SERVERS', '')
-        if servers_env:
-            vpn_cfg.setdefault('servers', [s.strip() for s in servers_env.split(',') if s.strip()])
-        vpn_cfg.setdefault('rotate_every', int(os.getenv('VPN_ROTATE_EVERY', '10')))
+        
 
     return config
 
@@ -1879,8 +1709,6 @@ def main():
     parser.add_argument('--config', default='config.json')
     parser.add_argument('--interactive', action='store_true',
                         help='Telegram interactive mode')
-    parser.add_argument('--continuous', action='store_true',
-                        help='Continuous scan mode')
     parser.add_argument('--sport', type=int, default=10)
     parser.add_argument('--ev', type=float, default=2.0)
 
@@ -1897,8 +1725,6 @@ def main():
 
     if args.interactive:
         scanner.run_interactive()
-    elif args.continuous:
-        scanner.run_continuous()
     else:
         scanner.run_single()
 
