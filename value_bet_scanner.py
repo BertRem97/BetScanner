@@ -231,7 +231,7 @@ class OddsPapiClient:
             response = self.session.get(
                 f"{self.BASE_URL}/{endpoint}",
                 params=params,
-                timeout=30
+                timeout=60
             )
             self.key_manager.record_request(api_key)
             if response.status_code == 429:
