@@ -242,7 +242,7 @@ class OddsPapiClient:
             response = self.session.get(
                 f"{self.BASE_URL}/{endpoint}",
                 params=params,
-                timeout=60
+                timeout=(10, 30)
             )
             self.key_manager.record_request(api_key)
             if response.status_code == 429:
@@ -1517,6 +1517,10 @@ class ValueBetScanner:
 
         self.seen_bets: set = set()
         self.confirmed_bets: List[Dict] = []
+        self.confirmed_bet_keys = {
+            f"{b['fixture_id']}_{b['soft_bookmaker']}_{b['outcome_id']}"
+            for b in self.confirmed_bets
+}
         self._load_seen()
 
     def _load_seen(self):
@@ -1651,7 +1655,7 @@ class ValueBetScanner:
                 for bet in bets:
                     key = f"{bet.fixture_id}_{bet.soft_bookmaker}_{bet.outcome_id}"
 
-                    if (bet.fixture_id and bet.outcome_id) not in self.confirmed_bets:
+                    if key not in self.confirmed_bet_keys:
                         value_bets.append(bet)
 
                     #if key not in self.seen_bets:
@@ -1693,9 +1697,9 @@ class ValueBetScanner:
 
                         if action == 'run' and not self.is_scanning:
                             logger.info("Updateing settlements")
-                            self.telegram.send_message("Settlements bijwerken...")
-                            msg = self.update_settlements()
-                            self.telegram.send_message(f"*Settlements*\n\n{msg}")
+                            #self.telegram.send_message("Settlements bijwerken...")
+                            #msg = self.update_settlements()
+                            #self.telegram.send_message(f"*Settlements*\n\n{msg}")
                             self.is_scanning = True
 
                             scan_thread = threading.Thread(
