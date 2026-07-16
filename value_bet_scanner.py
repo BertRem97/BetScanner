@@ -172,9 +172,20 @@ class OddsPapiClient:
 
     MARKET_1X2 = "101"
 
-    OUTCOME_HOME = "101"
-    OUTCOME_DRAW = "102"
-    OUTCOME_AWAY = "103"
+    MARKETS = {
+    "104": "Over/Under",
+    "101": "1X2 (Full Time Result)",
+    "102": "Asian Handicap"
+    }
+
+    OUTCOME_LABELS = {
+        '101': 'Home',
+        '102': 'Draw',
+        '103': 'Away',
+        '104': 'Over',
+        '105': 'Under'
+    }
+
 
     SOFT_BOOKMAKERS = [
         'cashpoint', 'unibet', 'pinnacle', 'ladbrokes.be',
@@ -339,19 +350,38 @@ class OddsPapiClient:
             logger.error(f"Error fetching settlements: {e}")
             return []
 
-    def extract_odds_from_market(self, bookmaker_data: Dict, market_id: str = "101") -> Dict[str, float]:
-        odds = {}
-        markets = bookmaker_data.get('markets', {})
-        market = markets.get(market_id, {})
-        outcomes = market.get('outcomes', {})
 
-        for outcome_id, outcome_data in outcomes.items():
-            players = outcome_data.get('players', {})
-            if '0' in players:
-                price = players['0'].get('price')
-                if price:
-                    odds[outcome_id] = price
+    def extract_odds_from_market(
+        self,
+        bookmaker_data: Dict,
+        market_ids: List[str]
+    ) -> Dict[str, Dict[str, float]]:
+
+        odds = {}
+
+        markets = bookmaker_data.get('markets', {})
+
+        for market_id in market_ids:
+            market = markets.get(market_id, {})
+            outcomes = market.get('outcomes', {})
+
+            market_odds = {}
+
+            for outcome_id, outcome_data in outcomes.items():
+                players = outcome_data.get('players', {})
+
+                if '0' in players:
+                    price = players['0'].get('price')
+
+                    if price:
+                        market_odds[outcome_id] = price
+
+            if market_odds:
+                odds[market_id] = market_odds
+
         return odds
+
+
 
     def get_outcome_betslip_url(self, bookmaker_data: Dict, outcome_id: str) -> Optional[str]:
         fixture_path = bookmaker_data.get('fixturePath', '')
@@ -375,19 +405,6 @@ class OddsPapiClient:
 class ValueBetCalculator:
     """Calculate value bets using median sharp reference and fractional Kelly"""
 
-    OUTCOME_LABELS = {
-        '101': 'Home',
-        '102': 'Draw',
-        '103': 'Away',
-        '104': 'Over',
-        '105': 'Under'
-    }
-
-    MARKET_LABELS = {
-        '101': '1X2 (Full Time Result)',
-        '104': 'Over/Under',
-        '102': 'Asian Handicap'
-    }
 
     def __init__(self, min_ev_threshold: float = 2.0, kelly_fraction: float = 0.25):
         self.min_ev_threshold = min_ev_threshold
@@ -431,79 +448,104 @@ class ValueBetCalculator:
         bookmaker_odds = odds_data.get('bookmakerOdds', {})
 
         # Collect median odds from sharp bookmakers
-        sharp_prices_by_outcome: Dict[str, List[float]] = {}
+        sharp_prices_by_outcome: Dict[str, Dict[str, Dict[str, float]]] = {}
         for sharp in OddsPapiClient.SHARP_BOOKMAKERS:
             if sharp not in bookmaker_odds:
                 continue
-            odds = self.odds_client.extract_odds_from_market(
-                bookmaker_odds[sharp], OddsPapiClient.MARKET_1X2
-            )
-            for outcome_id, price in odds.items():
-                sharp_prices_by_outcome.setdefault(outcome_id, []).append(price)
+
+            markets = self.odds_client.extract_odds_from_market(
+                bookmaker_odds[sharp],
+                OddsPapiClient.MARKETS.keys()
+                )
+        
+            for market_id, market_odds in markets.items():
+                for outcome_id, price in market_odds.items():
+                        
+                    sharp_prices_by_outcome \
+                        .setdefault(market_id, {}) \
+                        .setdefault(outcome_id, {})[sharp] = price \
+
 
         if not sharp_prices_by_outcome:
             return value_bets
 
-        median_sharp_odds = {
-            oid: self.calculate_median_odds(prices)
-            for oid, prices in sharp_prices_by_outcome.items()
-        }
+        median_sharp_odds = {}
 
-        # Collect ALL soft bookmaker odds per outcome
+        for market_id, outcomes in sharp_prices_by_outcome.items():
+            median_sharp_odds[market_id] = {}
+
+            for outcome_id, prices in outcomes.items():
+                median_sharp_odds[market_id][outcome_id] = \
+                    self.calculate_median_odds(list(prices.values()))
+                
         soft_odds_by_outcome: Dict[str, Dict[str, float]] = {}
         for soft_book in OddsPapiClient.SOFT_BOOKMAKERS:
             if soft_book not in bookmaker_odds:
                 continue
+
             book_odds = self.odds_client.extract_odds_from_market(
-                bookmaker_odds[soft_book], OddsPapiClient.MARKET_1X2
+                bookmaker_odds[soft_book], OddsPapiClient.MARKETS.keys()
             )
-            for outcome_id, price in book_odds.items():
-                soft_odds_by_outcome.setdefault(outcome_id, {})[soft_book] = price
+
+            for market_id, market_odds in book_odds.items():
+                for outcome_id, price in market_odds.items():
+                    soft_odds_by_outcome \
+                        .setdefault(market_id, {}) \
+                        .setdefault(outcome_id, {})[soft_book] = price \
+
 
         # Find value: for each outcome pick the best soft book
-        for outcome_id, median_sharp in median_sharp_odds.items():
-            all_soft = soft_odds_by_outcome.get(outcome_id, {})
-            if not all_soft:
-                continue
+        for market_id, outcomes in median_sharp_odds.items():
+            for outcome_id, median_sharp in outcomes.items():
 
-            best_book = max(all_soft, key=lambda b: all_soft[b])
-            best_odds = all_soft[best_book]
-            ev = self.calculate_ev(best_odds, median_sharp)
-
-            if ev >= self.min_ev_threshold:
-                win_prob = self.calculate_implied_probability(median_sharp)
-                stake_amount, kelly_pct = self.calculate_stake(
-                    win_prob, best_odds, bankroll, self.kelly_fraction
-                )
-                betslip_url = self.odds_client.get_outcome_betslip_url(
-                    bookmaker_odds[best_book], outcome_id
+                all_soft = (
+                    soft_odds_by_outcome
+                    .get(market_id, {})
+                    .get(outcome_id, {})
                 )
 
-                value_bets.append(ValueBet(
-                    fixture_id=fixture.get('fixtureId', ''),
-                    participant1=fixture.get('participant1Name', 'Unknown'),
-                    participant2=fixture.get('participant2Name', 'Unknown'),
-                    start_time=fixture.get('startTime', ''),
-                    tournament_name=fixture.get('tournamentName', 'Unknown'),
-                    category_name=fixture.get('categoryName', 'Unknown'),
-                    market=self.MARKET_LABELS.get('101', '1X2'),
-                    market_id='101',
-                    outcome=self.OUTCOME_LABELS.get(outcome_id, 'Unknown'),
-                    outcome_id=outcome_id,
-                    sharp_bookmaker='median',
-                    sharp_odds=median_sharp,
-                    soft_bookmaker=best_book,
-                    soft_odds=best_odds,
-                    soft_bookmaker_odds=dict(all_soft),
-                    ev_percentage=ev,
-                    win_probability=win_prob,
-                    stake_amount=stake_amount,
-                    stake_fraction=kelly_pct,
-                    bankroll=bankroll,
-                    kelly_fraction=kelly_pct,
-                    timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    betslip_url=betslip_url
-                ))
+                if not all_soft:
+                    continue
+
+                best_book = max(all_soft, key=lambda b: all_soft[b])
+                best_odds = all_soft[best_book]
+                ev = self.calculate_ev(best_odds, median_sharp)
+
+                if ev >= self.min_ev_threshold:
+                    win_prob = self.calculate_implied_probability(median_sharp)
+                    stake_amount, kelly_pct = self.calculate_stake(
+                        win_prob, best_odds, bankroll, self.kelly_fraction
+                    )
+                    betslip_url = self.odds_client.get_outcome_betslip_url(
+                        bookmaker_odds[best_book], outcome_id
+                    )
+
+                    value_bets.append(ValueBet(
+                        fixture_id=fixture.get('fixtureId', ''),
+                        participant1=fixture.get('participant1Name', 'Unknown'),
+                        participant2=fixture.get('participant2Name', 'Unknown'),
+                        start_time=fixture.get('startTime', ''),
+                        tournament_name=fixture.get('tournamentName', 'Unknown'),
+                        category_name=fixture.get('categoryName', 'Unknown'),
+                        market=OddsPapiClient.MARKETS.get(market_id, 'Unknown'),
+                        market_id=market_id,
+                        outcome = OddsPapiClient.OUTCOME_LABELS \
+                            .get(outcome_id, 'Unknown'),
+                        outcome_id=outcome_id,
+                        sharp_bookmaker='median',
+                        sharp_odds=median_sharp,
+                        soft_bookmaker=best_book,
+                        soft_odds=best_odds,
+                        soft_bookmaker_odds=dict(all_soft),
+                        ev_percentage=ev,
+                        win_probability=win_prob,
+                        stake_amount=stake_amount,
+                        stake_fraction=kelly_pct,
+                        bankroll=bankroll,
+                        kelly_fraction=kelly_pct,
+                        timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        betslip_url=betslip_url
+                    ))
 
         return value_bets
 
@@ -900,8 +942,7 @@ class GoogleSheetsManager:
                 range='Dashboard!A1:B20'
             ).execute()
             for row in result.get('values', []):
-                if len(row) >= 2 and row[0].lower() == 'bankroll':
-                    print(row)
+                if len(row) >= 2 and row[0].lower().strip() == 'bankroll':
                     return float(row[1])
         except Exception:
             pass
@@ -1166,23 +1207,58 @@ class TelegramBot:
     # ------------------------------------------------------------------
     # Update polling
     # ------------------------------------------------------------------
-
+    
     def get_updates(self, timeout: int = 5) -> List[Dict]:
         try:
             response = requests.get(
                 f"{self.base_url}/getUpdates",
-                params={"offset": self.last_update_id + 1, "timeout": timeout},
-                timeout=timeout + 10
+                params={
+                    "offset": self.last_update_id + 1,
+                    "timeout": timeout
+                },
+                timeout=(10, timeout + 10)   # connect timeout, read timeout
             )
+
+            response.raise_for_status()
+
             result = response.json()
-            if result.get('ok'):
-                updates = result.get('result', [])
-                if updates:
-                    self.last_update_id = updates[-1]['update_id']
-                return updates
-        except Exception as e:
-            logger.error(f"Error getting updates: {e}")
+
+            if not result.get("ok"):
+                logger.warning(f"Telegram API returned: {result}")
+                return []
+
+            updates = result.get("result", [])
+
+            if updates:
+                self.last_update_id = updates[-1]["update_id"]
+
+            return updates
+
+        except requests.exceptions.ConnectTimeout:
+            logger.warning("Telegram connect timeout")
+
+        except requests.exceptions.ReadTimeout:
+            logger.warning("Telegram read timeout")
+
+        except requests.exceptions.ConnectionError as e:
+            logger.warning(f"Telegram connection error: {e}")
+            time.sleep(5)
+
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"Telegram HTTP error: {e}")
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Telegram request error: {e}")
+
+        except ValueError:
+            logger.error("Telegram returned invalid JSON")
+
+        except Exception:
+            logger.exception("Unexpected error while getting Telegram updates")
+
         return []
+
+
 
     def process_update(self, update: Dict) -> Optional[Dict]:
         if 'callback_query' in update:
@@ -1574,7 +1650,9 @@ class ValueBetScanner:
                 bets = self.calculator.analyze_fixture(fixture, odds_data, bankroll)
                 for bet in bets:
                     key = f"{bet.fixture_id}_{bet.soft_bookmaker}_{bet.outcome_id}"
-                    value_bets.append(bet)
+
+                    if (bet.fixture_id and bet.outcome_id) not in self.confirmed_bets:
+                        value_bets.append(bet)
 
                     #if key not in self.seen_bets:
                         #value_bets.append(bet)
