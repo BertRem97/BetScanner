@@ -176,6 +176,12 @@ class OddsPapiClient:
     "104": "Over/Under",
     "101": "1X2 (Full Time Result)",
     "102": "Asian Handicap"
+    "101834: Beide teams scoren"
+    "101902: Dubbele kans"
+    "101444: Handicap"
+    "101022: Doelpunt in Beide Helften"
+    "10208: Match resultaat 1e helft"
+    "10211: Match resultaat 2de helft"
     }
 
     OUTCOME_LABELS = {
@@ -184,12 +190,30 @@ class OddsPapiClient:
         '103': 'Away',
         '104': 'Over',
         '105': 'Under'
+        "101835: Ja"
+        "101834: Nee"
+        "101902: 1X"
+        "101903: 12"
+        "101904: X2"
+        "101022: Ja"
+        "101023: Nee"
+        "10208: Home"
+        "10210: Away"
+        "10209: Draw"
+        "10211: Home"
+        "10213: Away"
+        "10212: Draw"
     }
 
 
-    SOFT_BOOKMAKERS = [
+    SOFT_BOOKMAKERS = [#cashpoint.be --> betcenter.be
         'cashpoint', 'unibet', 'pinnacle', 'ladbrokes.be',
-        'bcgame', 'bwin.be'
+        'bcgame', 'bwin.be', 'napoleansports.be' 
+
+        #betcenter.be, 
+        # bingoal.be, 
+        # betfirst.be, 
+        #goldenpalacesports.be, 
     ]
 
     # Sharp books used only for median reference, NOT as bet targets
@@ -215,21 +239,6 @@ class OddsPapiClient:
         except KeyboardInterrupt:
             print("Programma onderbroken door gebruiker")
 
-        while True:
-            try:
-                response = requests.get(
-                    "https://api.oddspapi.io/v4",
-                    timeout=5
-                )
-        
-                if response.status_code < 500:  
-                    return True
-                
-            except requests.exceptions.RequestException:
-                pass
-
-            time.sleep(2) 
-
 
     def _make_request(self, endpoint: str, params: Dict = None) -> requests.Response:
 
@@ -242,7 +251,7 @@ class OddsPapiClient:
             response = self.session.get(
                 f"{self.BASE_URL}/{endpoint}",
                 params=params,
-                timeout=(10, 30)
+                timeout=(10, 60)
             )
             self.key_manager.record_request(api_key)
             if response.status_code == 429:
@@ -261,6 +270,7 @@ class OddsPapiClient:
                     logger.warning("Forbidden 403 -> rotate IP address")
                     
                     self.rotate_ip()
+                    time.sleep(5)
                     return self._make_request(endpoint, params)
 
             return response
@@ -397,7 +407,7 @@ class OddsPapiClient:
         bookmaker_outcome_id = player_0.get('bookmakerOutcomeId', '')
 
         if bookmaker_outcome_id:
-            return player_0.get('betslip', None)
+            return fixture_path
         
         return None
 
@@ -1577,6 +1587,7 @@ class ValueBetScanner:
                     result = i.get("markets",{}).get(market_id, {}).get("outcomes", {}).get(outcome_id, {}).get("players", {}).get("0", {}).get("result", 'UNKNOWN')
 
                     status = result.upper()
+                    pprint(status, fid, outcome_id)
                     if 'WIN' in status:
                         wins += 1
                     elif 'LOSE' in status:
