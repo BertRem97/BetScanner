@@ -207,8 +207,8 @@ class OddsPapiClient:
 
 
     SOFT_BOOKMAKERS = [#cashpoint.be --> betcenter.be
-        'cashpoint', 'unibet', 'pinnacle', 'ladbrokes.be',
-        'bcgame', 'bwin.be', 'napoleansports.be' 
+        'cashpoint', 'unibet', 'pinnacle', 'goldenpalacesports.be',
+        'bcgame', 'bwin.be', 'napoleonsports.be'
 
         #betcenter.be, 
         # bingoal.be, 
