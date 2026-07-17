@@ -1707,7 +1707,7 @@ class ValueBetScanner:
                         action = result.get('action')
 
                         if action == 'run' and not self.is_scanning:
-                            logger.info("Updateing settlements")
+                            #logger.info("Updateing settlements")
                             #self.telegram.send_message("Settlements bijwerken...")
                             #msg = self.update_settlements()
                             #self.telegram.send_message(f"*Settlements*\n\n{msg}")
