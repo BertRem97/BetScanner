@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 # Column headers for the bet log sheet
 SHEET_HEADERS = [
     'Datum', 'Start wedstrijd', 'Event fixture', 'Match',
-    'Market', 'Outcome', 'Land / Tournooi', 'League',
+    'Sport', 'Market', 'Outcome', 'Land / Tournooi', 'League',
     'Soft Book', 'Odds overzicht (soft)', 'Sharp Ref (mediaan)',
     'EV %', 'Win Prob', 'Stake Amount', 'Kelly %',
     'Betslip', 'Mogelijke winst', 'Settlement'
@@ -129,8 +129,8 @@ class ValueBet:
     soft_bookmaker_odds: Dict[str, float]  # odds at ALL soft books for this outcome
     ev_percentage: float
     win_probability: float
+    sport: str
     stake_amount: float
-    stake_fraction: float
     bankroll: float
     kelly_fraction: float
     timestamp: str
@@ -143,11 +143,13 @@ class ValueBet:
             f"{bk} @ {o:.2f}"
             for bk, o in sorted(self.soft_bookmaker_odds.items(), key=lambda x: -x[1])
         )
+
         return {
             'Datum': self.timestamp,
             'Start wedstrijd': self.start_time,
             'Event fixture': self.fixture_id,
             'Match': f"{self.participant1} - {self.participant2}",
+            'Sport': self.sport,
             'Market': self.market,
             'Outcome': self.outcome,
             'Land / Tournooi': self.category_name,
@@ -203,6 +205,14 @@ class OddsPapiClient:
         "10211: Home"
         "10213: Away"
         "10212: Draw"
+    }
+
+    SPORT_LABELS = {
+        '10': 'Football',
+        '11': 'Basketball',
+        '12': 'Tennis',
+        '13': 'Baseball',
+        '14': 'American Football',
     }
 
 
@@ -551,9 +561,9 @@ class ValueBetCalculator:
                         soft_odds=best_odds,
                         soft_bookmaker_odds=dict(all_soft),
                         ev_percentage=ev,
+                        sport=OddsPapiClient.SPORT_LABELS.get(fixture['sportId']),
                         win_probability=win_prob,
                         stake_amount=stake_amount,
-                        stake_fraction=kelly_pct,
                         bankroll=bankroll,
                         kelly_fraction=kelly_pct,
                         timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -861,7 +871,6 @@ class GoogleSheetsManager:
         if sheet_name is None:
             sheet_name = self.get_or_create_monthly_sheet()
         try:
-            print(self.first_data_row)
             self.service.spreadsheets().values().append(
                 spreadsheetId=self.spreadsheet_id,
                 range=f"'{sheet_name}'!A{self.first_data_row}",
@@ -1007,13 +1016,12 @@ MANUAL_STEPS = [
     ('start_time',   'Starttijd (bijv. 2026-07-15 21:00):'),
     ('league',       'Competitie (bijv. Premier League):'),
     ('category',     'Land (bijv. England):'),
+    ('sport',        'Soort sport (bijv. Football):'),
     ('market',       'Markt (bijv. 1X2):'),
     ('outcome',      'Uitkomst (bijv. Home / Draw / Away):'),
     ('soft_book',    'Bookmaker (bijv. cashpoint):'),
     ('soft_odds',    'Odds bij bookmaker (bijv. 2.15):'),
     ('sharp_odds',   'Sharp referentie odds (mediaan, bijv. 2.00):'),
-    ('stake',        'Inzet bedrag (bijv. 25.00):'),
-    ('betslip',      'Betslip URL (of - als niet beschikbaar):'),
 ]
 
 
@@ -1042,6 +1050,15 @@ class ManualBetSession:
     def is_complete(self) -> bool:
         return self.step_index >= len(MANUAL_STEPS)
     
+
+    def calculate_kelly(self, probability: float, odds: float) -> float:
+        if odds <= 1:
+            return 0
+        b = odds - 1
+        q = 1 - probability
+        kelly = (probability * b - q) / b
+        return max(0, kelly)
+    
     def calculate_stake(self, probability: float, odds: float, bankroll: float,
                         fraction: float = 0.25) -> Tuple[float, float]:
         full_kelly = self.calculate_kelly(probability, odds)
@@ -1057,15 +1074,15 @@ class ManualBetSession:
         soft_odds = float(d['soft_odds'])
         sharp_odds = float(d['sharp_odds'])
         win_prob = 1 / sharp_odds if sharp_odds > 0 else 0
+        sport = d['sport']
 
         ev = ((win_prob * soft_odds) - 1) * 100
         if ev >= self.min_ev_threshold:
             stake, kelly_pct = self.calculate_stake(
                 win_prob, soft_odds, bankroll, self.kelly_fraction)
 
-            kelly = stake / bankroll if bankroll > 0 else 0
             betslip = d['betslip'] if d['betslip'] != '-' else None
-
+   
             return ValueBet(
                 fixture_id=f"manual_{datetime.now().strftime('%Y%m%d%H%M%S')}",
                 participant1=p1,
@@ -1081,11 +1098,11 @@ class ManualBetSession:
                 sharp_odds=sharp_odds,
                 soft_bookmaker=d['soft_book'],
                 soft_odds=soft_odds,
+                sport=sport,
                 soft_bookmaker_odds={d['soft_book']: soft_odds},
                 ev_percentage=ev,
                 win_probability=win_prob,
                 stake_amount=stake,
-                stake_fraction=kelly_pct,
                 bankroll=bankroll,
                 kelly_fraction=kelly_pct,
                 timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -1194,6 +1211,7 @@ class TelegramBot:
 
         message = (
             f"*Value Bet Gevonden!*\n\n"
+            f"Sport: {bet.sport}\n"
             f"*{bet.participant1}* vs *{bet.participant2}*\n"
             f"Start: {bet.start_time}\n"
             f"Competitie: {bet.tournament_name} ({bet.category_name})\n\n"
@@ -1409,11 +1427,13 @@ class TelegramBot:
             f"*Samenvatting manuele bet*\n\n"
             f"*{bet.participant1}* vs *{bet.participant2}*\n"
             f"Start: {bet.start_time}\n"
+            f"Sport: {bet.sport}\n"
             f"Competitie: {bet.tournament_name} ({bet.category_name})\n\n"
             f"Markt: {bet.market} | Uitkomst: *{bet.outcome}*\n\n"
             f"*Odds overzicht:*\n{odds_table}\n\n"
             f"*EV: {bet.ev_percentage:.2f}%*\n"
-            f"*Inzet: {bet.stake_amount:.2f}*\n\n"
+            f"*Inzet: €{bet.stake_amount:.2f}*\n\n"
+            f"(Kelly: {bet.kelly_fraction:.2%} van {bet.bankroll:.0f})\n\n"
             f"Bet opslaan?"
         )
         keyboard = {
