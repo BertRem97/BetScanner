@@ -210,6 +210,7 @@ class OddsPapiClient:
         'cashpoint', 'unibet', 'pinnacle', 'goldenpalacesports.be',
         'bcgame', 'bwin.be', 'napoleonsports.be'
 
+        #ladbrokes.be
         #betcenter.be, 
         # bingoal.be, 
         # betfirst.be, 
@@ -218,7 +219,7 @@ class OddsPapiClient:
 
     # Sharp books used only for median reference, NOT as bet targets
     SHARP_BOOKMAKERS = [
-        'pinnacle', 'betfair', 'sbobet', 'bet365.com'
+        'pinnacle', 'betfair', 'stake', 'bet365.com'
     ]
 
     def __init__(self, api_keys, settlements, requests_per_key: int = 250):
@@ -296,7 +297,6 @@ class OddsPapiClient:
     def get_tournaments(self, sport_id: int = 10) -> List[Dict]:
         try:
             response = self._make_request("tournaments", {'sportId': sport_id})
-            print(response)
             if response is None:
                 return None
             response.raise_for_status()
@@ -349,7 +349,7 @@ class OddsPapiClient:
                 for x in self.settlements:
                     if id == x["fixtureId"]:
                         continue
-
+                
                 response = self._make_request("settlements", {'fixtureId': id})
                 if response is None:
                     return None
@@ -485,8 +485,12 @@ class ValueBetCalculator:
             median_sharp_odds[market_id] = {}
 
             for outcome_id, prices in outcomes.items():
-                median_sharp_odds[market_id][outcome_id] = \
-                    self.calculate_median_odds(list(prices.values()))
+                sharp_odds_list = list(prices.values())
+                if len(sharp_odds_list) > 3:
+                    median_sharp_odds[market_id][outcome_id] = \
+                        self.calculate_median_odds(list(prices.values()))
+                else:
+                    return value_bets
                 
         soft_odds_by_outcome: Dict[str, Dict[str, float]] = {}
         for soft_book in OddsPapiClient.SOFT_BOOKMAKERS:
@@ -1587,7 +1591,7 @@ class ValueBetScanner:
                     result = i.get("markets",{}).get(market_id, {}).get("outcomes", {}).get(outcome_id, {}).get("players", {}).get("0", {}).get("result", 'UNKNOWN')
 
                     status = result.upper()
-                    pprint(status, fid, outcome_id)
+                    pprint((status, fid, outcome_id))
                     if 'WIN' in status:
                         wins += 1
                     elif 'LOSE' in status:
