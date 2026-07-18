@@ -175,41 +175,42 @@ class OddsPapiClient:
     MARKET_1X2 = "101"
 
     MARKETS = {
-    "104": "Over/Under",
+    #"104": "Over/Under",
     "101": "1X2 (Full Time Result)",
-    "102": "Asian Handicap"
-    "101834: Beide teams scoren"
-    "101902: Dubbele kans"
-    "101444: Handicap"
-    "101022: Doelpunt in Beide Helften"
-    "10208: Match resultaat 1e helft"
-    "10211: Match resultaat 2de helft"
+    "102": "Asian Handicap",
+    "101834": "Beide teams scoren",
+    "101902": "Dubbele kans",
+    "101444": "Handicap",
+    "101022": "Doelpunt in Beide Helften",
+    "10208": "Match resultaat 1e helft",
+    "10211": "Match resultaat 2de helft",
+
     }
 
     OUTCOME_LABELS = {
         '101': 'Home',
         '102': 'Draw',
         '103': 'Away',
-        '104': 'Over',
-        '105': 'Under'
-        "101835: Ja"
-        "101834: Nee"
-        "101902: 1X"
-        "101903: 12"
-        "101904: X2"
-        "101022: Ja"
-        "101023: Nee"
-        "10208: Home"
-        "10210: Away"
-        "10209: Draw"
-        "10211: Home"
-        "10213: Away"
-        "10212: Draw"
+        #'104': 'Over',
+        #'105': 'Under',
+        '101835': 'Ja',
+        '101834': 'Nee',
+        '101902': '1X',
+        '101903': '12',
+        '101904': 'X2',
+        '101022': 'Ja',
+        '101023': 'Nee',
+        '10208': 'Home',
+        '10210': 'Away',
+        '10209': 'Draw',
+        '10211': 'Home',
+        '10213': 'Away',
+        '10212': 'Draw'
     }
 
     SPORT_LABELS = {
-        '10': 'Football',
-        '11': 'Basketball',
+        '10': 'Voetbal',
+        '11': 'Basketbal',
         '12': 'Tennis',
         '13': 'Baseball',
         '14': 'American Football',
@@ -319,6 +320,7 @@ class OddsPapiClient:
     def get_fixtures(self, tournament_id: Optional[int] = None, sport_id: int = 10,
                       days_ahead: int = 7, has_odds: bool = True) -> List[Dict]:
         today = datetime.now().date()
+
         params = {
             'sportId': sport_id,
             'from': today.isoformat(),
@@ -467,7 +469,7 @@ class ValueBetCalculator:
     def analyze_fixture(self, fixture: Dict, odds_data: Dict, bankroll: float) -> List[ValueBet]:
         value_bets = []
         bookmaker_odds = odds_data.get('bookmakerOdds', {})
-
+       
         # Collect median odds from sharp bookmakers
         sharp_prices_by_outcome: Dict[str, Dict[str, Dict[str, float]]] = {}
         for sharp in OddsPapiClient.SHARP_BOOKMAKERS:
@@ -561,7 +563,7 @@ class ValueBetCalculator:
                         soft_odds=best_odds,
                         soft_bookmaker_odds=dict(all_soft),
                         ev_percentage=ev,
-                        sport=OddsPapiClient.SPORT_LABELS.get(fixture['sportId']),
+                        sport=OddsPapiClient.SPORT_LABELS.get(str(fixture['sportId'])),
                         win_probability=win_prob,
                         stake_amount=stake_amount,
                         bankroll=bankroll,
@@ -1211,10 +1213,10 @@ class TelegramBot:
 
         message = (
             f"*Value Bet Gevonden!*\n\n"
-            f"Sport: {bet.sport}\n"
             f"*{bet.participant1}* vs *{bet.participant2}*\n"
             f"Start: {bet.start_time}\n"
-            f"Competitie: {bet.tournament_name} ({bet.category_name})\n\n"
+            f"Competitie: {bet.tournament_name} ({bet.category_name})\n"
+            f"Sport: {bet.sport}\n\n"
             f"Markt: {bet.market}\n"
             f"Uitkomst: *{bet.outcome}*\n\n"
             f"*Odds overzicht:*\n"
@@ -1653,9 +1655,8 @@ class ValueBetScanner:
         if not sport_ids:
             raise ValueError("No sport id's configured")
             
-
-        for i in sport_ids:
-            tournaments = self.odds_client.get_tournaments(i)
+        for id in sport_ids:
+            tournaments = self.odds_client.get_tournaments(id)
             if tournaments is None:
                 logger.info("Stopping scanner due to unforseen problems")
                 msg = "Kon data niet ophalen, probeer opnieuw met andere keys of roteer IP adress"
@@ -1672,7 +1673,7 @@ class ValueBetScanner:
                 
                 fixtures = self.odds_client.get_fixtures(
                     tournament_id=tournament['tournamentId'],
-                    sport_id=i,
+                    sport_id=id,
                     days_ahead=self.config.get('days_ahead', 7)
                 )
                 if fixtures is None:
@@ -1711,17 +1712,17 @@ class ValueBetScanner:
                     time.sleep(self.config.get('request_delay', 1))
 
 
-        self._save_seen()
-        logger.info(f"Found {len(value_bets)} value bets")
-        self.is_scanning = True
-        
-        for bet in value_bets:
-            if not self.is_scanning:
-                break
-            if self.telegram:
-                self.telegram.send_value_bet_notification(bet)
-            else:
-                self._log_bet(bet)
+            self._save_seen()
+            logger.info(f"Found {len(value_bets)} value bets")
+            self.is_scanning = True
+            
+            for bet in value_bets:
+                if not self.is_scanning:
+                    break
+                if self.telegram:
+                    self.telegram.send_value_bet_notification(bet)
+                else:
+                    self._log_bet(bet)
     
 
     def run_interactive(self):
@@ -1836,7 +1837,7 @@ def main():
     parser.add_argument('--config', default='config.json')
     parser.add_argument('--interactive', action='store_true',
                         help='Telegram interactive mode')
-    parser.add_argument('--sport', type=int, default=[10, 13, 17])
+    parser.add_argument('--sport', type=int, nargs='+', default=[10], help="Sport ID's")
     parser.add_argument('--ev', type=float, default=15)
 
     args = parser.parse_args()
