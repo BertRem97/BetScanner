@@ -27,6 +27,7 @@ import os
 from pathlib import Path
 from collections import defaultdict
 from pprint import pprint
+from mapping import MARKETS as mapping
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -172,50 +173,6 @@ class OddsPapiClient:
 
     BASE_URL = "https://api.oddspapi.io/v4"
 
-    MARKET_1X2 = "101"
-
-    MARKETS = {
-    #"104": "Over/Under",
-    "101": "1X2 (Full Time Result)",
-    "102": "Asian Handicap",
-    "101834": "Beide teams scoren",
-    "101902": "Dubbele kans",
-    "101444": "Handicap",
-    "101022": "Doelpunt in Beide Helften",
-    "10208": "Match resultaat 1e helft",
-    "10211": "Match resultaat 2de helft",
-
-    }
-
-    OUTCOME_LABELS = {
-        '101': 'Home',
-        '102': 'Draw',
-        '103': 'Away',
-        #'104': 'Over',
-        #'105': 'Under',
-        '101835': 'Ja',
-        '101834': 'Nee',
-        '101902': '1X',
-        '101903': '12',
-        '101904': 'X2',
-        '101022': 'Ja',
-        '101023': 'Nee',
-        '10208': 'Home',
-        '10210': 'Away',
-        '10209': 'Draw',
-        '10211': 'Home',
-        '10213': 'Away',
-        '10212': 'Draw'
-    }
-
-    SPORT_LABELS = {
-        '10': 'Voetbal',
-        '11': 'Basketbal',
-        '12': 'Tennis',
-        '13': 'Baseball',
-        '14': 'American Football',
-    }
-
 
     SOFT_BOOKMAKERS = [#cashpoint.be --> betcenter.be
         'cashpoint', 'unibet', 'pinnacle', 'goldenpalacesports.be',
@@ -291,7 +248,7 @@ class OddsPapiClient:
             self.key_manager.record_error(api_key)
             raise
     
-    
+
     def get_key_status(self) -> Dict:
         return self.key_manager.get_status()
 
@@ -469,7 +426,17 @@ class ValueBetCalculator:
     def analyze_fixture(self, fixture: Dict, odds_data: Dict, bankroll: float) -> List[ValueBet]:
         value_bets = []
         bookmaker_odds = odds_data.get('bookmakerOdds', {})
-       
+
+        sport_id = str(fixture.get('sportId'))
+        sport_data = mapping.get(sport_id, {})
+
+        if not sport_data:
+            return value_bets
+
+        sport_name = next(iter(sport_data))
+        sport_markets = sport_data[sport_name]
+        market_ids = list(sport_markets.keys())
+             
         # Collect median odds from sharp bookmakers
         sharp_prices_by_outcome: Dict[str, Dict[str, Dict[str, float]]] = {}
         for sharp in OddsPapiClient.SHARP_BOOKMAKERS:
@@ -478,7 +445,7 @@ class ValueBetCalculator:
 
             markets = self.odds_client.extract_odds_from_market(
                 bookmaker_odds[sharp],
-                OddsPapiClient.MARKETS.keys()
+                market_ids
                 )
             
             for market_id, market_odds in markets.items():
@@ -508,7 +475,7 @@ class ValueBetCalculator:
                 continue
 
             book_odds = self.odds_client.extract_odds_from_market(
-                bookmaker_odds[soft_book], OddsPapiClient.MARKETS.keys()
+                bookmaker_odds[soft_book], market_ids
             )
 
             for market_id, market_odds in book_odds.items():
@@ -545,6 +512,20 @@ class ValueBetCalculator:
                         bookmaker_odds[best_book], outcome_id
                     )
 
+                    market_info = sport_markets.get(market_id)
+
+                    if not market_info:
+                        continue
+
+                    market_name = next(iter(market_info))
+                    outcomes = market_info[market_name]
+
+                    outcome_name = outcomes.get(
+                        outcome_id,
+                        "Unknown"
+                    )
+
+
                     value_bets.append(ValueBet(
                         fixture_id=fixture.get('fixtureId', ''),
                         participant1=fixture.get('participant1Name', 'Unknown'),
@@ -552,10 +533,9 @@ class ValueBetCalculator:
                         start_time=fixture.get('startTime', ''),
                         tournament_name=fixture.get('tournamentName', 'Unknown'),
                         category_name=fixture.get('categoryName', 'Unknown'),
-                        market=OddsPapiClient.MARKETS.get(market_id, 'Unknown'),
+                        market=market_name,
                         market_id=market_id,
-                        outcome = OddsPapiClient.OUTCOME_LABELS \
-                            .get(outcome_id, 'Unknown'),
+                        outcome = outcome_name,
                         outcome_id=outcome_id,
                         sharp_bookmaker='median',
                         sharp_odds=median_sharp,
@@ -563,7 +543,7 @@ class ValueBetCalculator:
                         soft_odds=best_odds,
                         soft_bookmaker_odds=dict(all_soft),
                         ev_percentage=ev,
-                        sport=OddsPapiClient.SPORT_LABELS.get(str(fixture['sportId'])),
+                        sport=sport_name,
                         win_probability=win_prob,
                         stake_amount=stake_amount,
                         bankroll=bankroll,
@@ -1713,7 +1693,7 @@ class ValueBetScanner:
 
 
             self._save_seen()
-            logger.info(f"Found {len(value_bets)} value bets")
+            logger.info(f"Found {len(value_bets)} value bets for sport ID {id}")
             self.is_scanning = True
             
             for bet in value_bets:
@@ -1837,8 +1817,8 @@ def main():
     parser.add_argument('--config', default='config.json')
     parser.add_argument('--interactive', action='store_true',
                         help='Telegram interactive mode')
-    parser.add_argument('--sport', type=int, nargs='+', default=[10], help="Sport ID's")
-    parser.add_argument('--ev', type=float, default=15)
+    parser.add_argument('--sport', type=int, nargs='+', default=[10, 11, 13, 19], help="Sport ID's")
+    parser.add_argument('--ev', type=float, default=10)
 
     args = parser.parse_args()
     config = load_config(args.config)

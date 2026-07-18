@@ -168,10 +168,16 @@
   "ecba1f3d-7561-48f1-bc85-ad2ca25b9850", "24288a9f-135c-4d92-97db-5dc509a8210e",
   "a356e2ba-f5f4-4219-907a-1b25ebd06566", "ace72f00-f02f-4679-83dc-aa811f18a2ad",
   "37f6faf3-a7f7-47a4-9fa5-d4983daafb41", "9df51532-f675-4d21-aa1b-c44bd7a897ac",
-  "4bea603f-83b5-4d79-8711-9a3c1f3b9a61", "70f19279-1295-4e6b-9098-f9cc21fc50f3"
+  "4bea603f-83b5-4d79-8711-9a3c1f3b9a61", "70f19279-1295-4e6b-9098-f9cc21fc50f3",
+  "3f3d1724-edd9-46e9-a318-927e3f9b3133", "619d1f2a-30e7-4307-be86-a98945b46e18",
+  "f844f4a5-97f7-45d9-83cb-65ea27fe7c37", "eb5ab752-4110-4907-992c-7e9d425bcfe7",
+  "e2bde08f-bfb0-4ebf-8ff7-856227bf5a9c", "0e084bfd-b8a2-4b7a-930f-2aa53e8bce3f",
+  "e0162f81-f41a-4e7d-b2a3-084a61909d10", "cf509b46-5811-4d76-87ab-b7d07f83bf6c",
+  "2f410e1e-866e-4628-bec0-f467859f7a77", "6105e79b-9135-4ec6-9726-32bffcf99ac9"
 
   ],
-
+  "SOFT_BOOKMAKERS": ["cashpoint", "unibet", "pinnacle", "goldenpalacesports.be","bcgame", "bwin.be", "napoleonsports.be"],
+  "SHARP_BOOKMAKERS": ["pinnacle", "unibet", "sbobet", "betano", "bwin.be"],
   "requests_per_key": 250,
   "telegram_bot_token": "8637867779:AAGQq9jN_IbZkHqdkyMIbFc9GgXxufoJxb0",
   "telegram_chat_id": "6980285678",
@@ -180,7 +186,7 @@
   "min_ev_threshold": 10,
   "kelly_fraction": 0.20,
   "bankroll": 1000,
-  "sport_id": [10],
+  "sport_id": [10, 13, 11, 19],
   "max_tournaments": 20,
   "days_ahead": 30,
   "request_delay": 1.0,
