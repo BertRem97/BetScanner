@@ -219,7 +219,7 @@ class OddsPapiClient:
 
     # Sharp books used only for median reference, NOT as bet targets
     SHARP_BOOKMAKERS = [
-        'pinnacle', 'betfair', 'stake', 'bet365.com'
+        'pinnacle', 'unibet', 'sbobet', 'betano', 'bwin.be'
     ]
 
     def __init__(self, api_keys, settlements, requests_per_key: int = 250):
@@ -254,7 +254,7 @@ class OddsPapiClient:
                 params=params,
                 timeout=(10, 60)
             )
-            self.key_manager.record_request(api_key)
+            
             if response.status_code == 429:
                 self.key_manager.record_error(api_key)
                 
@@ -273,7 +273,8 @@ class OddsPapiClient:
                     self.rotate_ip()
                     time.sleep(5)
                     return self._make_request(endpoint, params)
-
+                
+            self.key_manager.record_request(api_key)
             return response
         except Exception as e:
             self.key_manager.record_error(api_key)
@@ -467,10 +468,9 @@ class ValueBetCalculator:
                 bookmaker_odds[sharp],
                 OddsPapiClient.MARKETS.keys()
                 )
-        
+            
             for market_id, market_odds in markets.items():
                 for outcome_id, price in market_odds.items():
-                        
                     sharp_prices_by_outcome \
                         .setdefault(market_id, {}) \
                         .setdefault(outcome_id, {})[sharp] = price \
@@ -486,12 +486,10 @@ class ValueBetCalculator:
 
             for outcome_id, prices in outcomes.items():
                 sharp_odds_list = list(prices.values())
-                if len(sharp_odds_list) > 3:
-                    median_sharp_odds[market_id][outcome_id] = \
-                        self.calculate_median_odds(list(prices.values()))
-                else:
-                    return value_bets
-                
+                median_sharp_odds[market_id][outcome_id] = \
+                self.calculate_median_odds(sharp_odds_list)
+             
+      
         soft_odds_by_outcome: Dict[str, Dict[str, float]] = {}
         for soft_book in OddsPapiClient.SOFT_BOOKMAKERS:
             if soft_book not in bookmaker_odds:
@@ -509,6 +507,7 @@ class ValueBetCalculator:
 
 
         # Find value: for each outcome pick the best soft book
+
         for market_id, outcomes in median_sharp_odds.items():
             for outcome_id, median_sharp in outcomes.items():
 
@@ -1021,25 +1020,18 @@ MANUAL_STEPS = [
 class ManualBetSession:
     """Tracks the state of an active manual-entry conversation for one chat."""
 
-    def __init__(self):
+    def __init__(self, min_ev_threshold: float = 2.0, kelly_fraction: float = 0.25):
         self.step_index = 0
         self.data: Dict[str, str] = {}
-        
-
+        self.min_ev_threshold = min_ev_threshold
+        self.kelly_fraction = kelly_fraction
+       
     @property
     def current_step(self) -> Optional[Tuple[str, str]]:
         if self.step_index < len(MANUAL_STEPS):
             return MANUAL_STEPS[self.step_index]
         return None
     
-
-    def calculate_stake(self, probability: float, odds: float, bankroll: float,
-                    fraction: float = 0.25) -> Tuple[float, float]:
-        
-        full_kelly = self.calculate_kelly(probability, odds)
-        fractional_kelly = full_kelly * fraction
-        stake_amount = bankroll * fractional_kelly
-        return stake_amount, fractional_kelly
     
     def record_answer(self, answer: str):
         key, _ = MANUAL_STEPS[self.step_index]
@@ -1049,6 +1041,13 @@ class ManualBetSession:
     @property
     def is_complete(self) -> bool:
         return self.step_index >= len(MANUAL_STEPS)
+    
+    def calculate_stake(self, probability: float, odds: float, bankroll: float,
+                        fraction: float = 0.25) -> Tuple[float, float]:
+        full_kelly = self.calculate_kelly(probability, odds)
+        fractional_kelly = full_kelly * fraction
+        stake_amount = bankroll * fractional_kelly
+        return stake_amount, fractional_kelly
 
     def to_value_bet(self, bankroll: float) -> 'ValueBet':
         d = self.data
@@ -1057,38 +1056,42 @@ class ManualBetSession:
         p2 = parts[1].strip() if len(parts) > 1 else ''
         soft_odds = float(d['soft_odds'])
         sharp_odds = float(d['sharp_odds'])
-        stake = self.calculate_stake()
         win_prob = 1 / sharp_odds if sharp_odds > 0 else 0
-        ev = ((win_prob * soft_odds) - 1) * 100
-        kelly = stake / bankroll if bankroll > 0 else 0
-        betslip = d['betslip'] if d['betslip'] != '-' else None
 
-        return ValueBet(
-            fixture_id=f"manual_{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            participant1=p1,
-            participant2=p2,
-            start_time=d['start_time'],
-            tournament_name=d['league'],
-            category_name=d['category'],
-            market=d['market'],
-            market_id='manual',
-            outcome=d['outcome'],
-            outcome_id='manual',
-            sharp_bookmaker='manueel',
-            sharp_odds=sharp_odds,
-            soft_bookmaker=d['soft_book'],
-            soft_odds=soft_odds,
-            soft_bookmaker_odds={d['soft_book']: soft_odds},
-            ev_percentage=ev,
-            win_probability=win_prob,
-            stake_amount=stake,
-            stake_fraction=kelly,
-            bankroll=bankroll,
-            kelly_fraction=kelly,
-            timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            betslip_url=betslip,
-            settlement_status='PENDING'
-        )
+        ev = ((win_prob * soft_odds) - 1) * 100
+        if ev >= self.min_ev_threshold:
+            stake, kelly_pct = self.calculate_stake(
+                win_prob, soft_odds, bankroll, self.kelly_fraction)
+
+            kelly = stake / bankroll if bankroll > 0 else 0
+            betslip = d['betslip'] if d['betslip'] != '-' else None
+
+            return ValueBet(
+                fixture_id=f"manual_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                participant1=p1,
+                participant2=p2,
+                start_time=d['start_time'],
+                tournament_name=d['league'],
+                category_name=d['category'],
+                market=d['market'],
+                market_id='manual',
+                outcome=d['outcome'],
+                outcome_id='manual',
+                sharp_bookmaker='manueel',
+                sharp_odds=sharp_odds,
+                soft_bookmaker=d['soft_book'],
+                soft_odds=soft_odds,
+                soft_bookmaker_odds={d['soft_book']: soft_odds},
+                ev_percentage=ev,
+                win_probability=win_prob,
+                stake_amount=stake,
+                stake_fraction=kelly_pct,
+                bankroll=bankroll,
+                kelly_fraction=kelly_pct,
+                timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                betslip_url=betslip,
+                settlement_status='PENDING'
+            )
 
 
 class TelegramBot:
@@ -1512,6 +1515,9 @@ class ValueBetScanner:
         )
         self.calculator.set_odds_client(self.odds_client)
 
+        ManualBetSession(min_ev_threshold=config.get('min_ev_thresold', 2.0),
+                         kelly_fraction=config.get('kelly_fraction', 0.25))
+
         self.sheets = None
         if config.get('google_credentials_path') and config.get('google_spreadsheet_id'):
             self.sheets = GoogleSheetsManager(
@@ -1622,62 +1628,68 @@ class ValueBetScanner:
         status = self.odds_client.get_key_status()
         logger.info(f"API Status: {status['total_remaining']} requests remaining")
 
-        sport_id = self.config.get('sport_id', 10)
-
-        tournaments = self.odds_client.get_tournaments(sport_id)
-        if tournaments is None:
-            logger.info("Stopping scanner due to unforseen problems")
-            msg = "Kon data niet ophalen, probeer opnieuw met andere keys of roteer IP adress"
-            self.is_scanning = False
-            self.telegram.send_message(msg)
-            return 
-
-        active = [t for t in tournaments
-                  if t.get('upcomingFixtures', 0) > 0 or t.get('futureFixtures', 0) > 0]
-
-        for tournament in active[:self.config.get('max_tournaments', 10)]:
-            if not self.is_scanning:
-                break
+        sport_ids = self.config.get('sport_id', [])
+    
+        if not sport_ids:
+            raise ValueError("No sport id's configured")
             
-            fixtures = self.odds_client.get_fixtures(
-                tournament_id=tournament['tournamentId'],
-                sport_id=sport_id,
-                days_ahead=self.config.get('days_ahead', 7)
-            )
-            if fixtures is None:
-                msg = "Kon data niet ophalen, probeer opnieuw met andere keys of roteer IP adress"
+
+        for i in sport_ids:
+            tournaments = self.odds_client.get_tournaments(i)
+            if tournaments is None:
                 logger.info("Stopping scanner due to unforseen problems")
+                msg = "Kon data niet ophalen, probeer opnieuw met andere keys of roteer IP adress"
                 self.is_scanning = False
                 self.telegram.send_message(msg)
                 return 
 
-            for fixture in fixtures:
+            active = [t for t in tournaments
+                    if t.get('upcomingFixtures', 0) > 0 or t.get('futureFixtures', 0) > 0]
+
+            for tournament in active[:self.config.get('max_tournaments', 10)]:
                 if not self.is_scanning:
                     break
-
-                odds_data = self.odds_client.get_odds(fixture['fixtureId'])
-                if odds_data is None:
-                    logger.info("Stopping scanner due to unforseen problems")
+                
+                fixtures = self.odds_client.get_fixtures(
+                    tournament_id=tournament['tournamentId'],
+                    sport_id=i,
+                    days_ahead=self.config.get('days_ahead', 7)
+                )
+                if fixtures is None:
                     msg = "Kon data niet ophalen, probeer opnieuw met andere keys of roteer IP adress"
+                    logger.info("Stopping scanner due to unforseen problems")
                     self.is_scanning = False
                     self.telegram.send_message(msg)
                     return 
 
-                if not odds_data.get('bookmakerOdds'):
-                    continue
+                for fixture in fixtures:
+                    if not self.is_scanning:
+                        break
 
-                bets = self.calculator.analyze_fixture(fixture, odds_data, bankroll)
-                for bet in bets:
-                    key = f"{bet.fixture_id}_{bet.soft_bookmaker}_{bet.outcome_id}"
+                    odds_data = self.odds_client.get_odds(fixture['fixtureId'])
+                    if odds_data is None:
+                        logger.info("Stopping scanner due to unforseen problems")
+                        msg = "Kon data niet ophalen, probeer opnieuw met andere keys of roteer IP adress"
+                        self.is_scanning = False
+                        self.telegram.send_message(msg)
+                        return 
 
-                    if key not in self.confirmed_bet_keys:
-                        value_bets.append(bet)
+                    if not odds_data.get('bookmakerOdds'):
+                        continue
 
-                    #if key not in self.seen_bets:
-                        #value_bets.append(bet)
-                        #self.seen_bets.add(key)
+                    bets = self.calculator.analyze_fixture(fixture, odds_data, bankroll)
+                    for bet in bets:
+                        key = f"{bet.fixture_id}_{bet.soft_bookmaker}_{bet.outcome_id}"
 
-                time.sleep(self.config.get('request_delay', 1))
+                        if key not in self.confirmed_bet_keys:
+                            value_bets.append(bet)
+
+                        #if key not in self.seen_bets:
+                            #value_bets.append(bet)
+                            #self.seen_bets.add(key)
+
+                    time.sleep(self.config.get('request_delay', 1))
+
 
         self._save_seen()
         logger.info(f"Found {len(value_bets)} value bets")
@@ -1795,8 +1807,6 @@ def load_config(path: str = 'config.json') -> Dict:
         config.setdefault('scan_interval', int(os.getenv('SCAN_INTERVAL', '300')))
         config.setdefault('requests_per_key', int(os.getenv('REQUESTS_PER_KEY', '250')))
 
-        
-
     return config
 
 
@@ -1806,12 +1816,20 @@ def main():
     parser.add_argument('--config', default='config.json')
     parser.add_argument('--interactive', action='store_true',
                         help='Telegram interactive mode')
-    parser.add_argument('--sport', type=int, default=10)
-    parser.add_argument('--ev', type=float, default=2.0)
+    parser.add_argument('--sport', type=int, default=[10, 13, 17])
+    parser.add_argument('--ev', type=float, default=15)
 
     args = parser.parse_args()
     config = load_config(args.config)
     config['sport_id'] = args.sport
+
+    if args.sport is not None:
+        if isinstance(args.sport, list):
+            config["sport_id"] = args.sport
+        else:
+            config["sport_id"] = [args.sport]
+
+
     config['min_ev_threshold'] = args.ev
 
     if not config.get('oddspapi_keys'):
