@@ -159,7 +159,7 @@ class ValueBet:
             'Odds overzicht (soft)': odds_str,
             'Sharp Ref (mediaan)': round(self.sharp_odds, 2),
             'EV %': round(self.ev_percentage / 100, 2),
-            'Win Prob': round(self.win_probability / 100 , 2),
+            'Win Prob': round(self.win_probability, 2),
             'Stake Amount': round(self.stake_amount, 2),
             'Kelly %': round(self.kelly_fraction, 2),
             'Betslip': self.betslip_url or '',
@@ -564,7 +564,6 @@ class ValueBetCalculator:
                         "Unknown"
                     )
 
-
                     value_bets.append(ValueBet(
                         fixture_id=fixture.get('fixtureId', ''),
                         participant1=fixture.get('participant1Name', 'Unknown'),
@@ -727,7 +726,7 @@ class GoogleSheetsManager:
             # Aantal maandbladen opslaan
             self.service.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
-                range=f"{main_sheet}!C18",
+                range=f"{main_sheet}!C17",
                 valueInputOption="USER_ENTERED",
                 body={
                     "values": [[len_monthly_sheets]]
@@ -985,12 +984,14 @@ class GoogleSheetsManager:
     def get_overview(self) -> float:
         result = self.service.spreadsheets().values().get(
                 spreadsheetId=self.spreadsheet_id,
-                range='Dashboard!A9:B15'
+                range='Dashboard!A14:C19',
+                valueRenderOption="UNFORMATTED_VALUE"
+
             ).execute()
         
         data = {}
         for row in result.get('values', []):
-            desc, value = row[0], row[1]
+            desc, value = row[0], row[2]
             data[desc] = value
 
         return data
@@ -1123,7 +1124,7 @@ class ManualBetSession:
             stake, kelly_pct = self.calculate_stake(
                 win_prob, soft_odds, bankroll, self.kelly_fraction)
 
-            win_prob = win_prob * 100
+            
             #betslip = d['betslip'] if d['betslip'] != '-' else None
             return ValueBet(
                 fixture_id=f"manual_{datetime.now().strftime('%Y%m%d%H%M%S')}",
@@ -1477,7 +1478,7 @@ class TelegramBot:
             f"Markt: {bet.market} | Uitkomst: *{bet.outcome}*\n\n"
             f"*Odds overzicht:*\n{odds_table}\n\n"
             f"*EV: {bet.ev_percentage:.2f}%*\n"
-            f"Win kans: {bet.win_probability}%\n\n"
+            f"Win kans: {bet.win_probability:.1%}\n\n"
             f"*Inzet: €{bet.stake_amount:.2f}*\n"
             f"(Kelly: {bet.kelly_fraction:.2%} van {bet.bankroll:.0f})\n\n"
             f"Bet opslaan?"
@@ -1551,7 +1552,6 @@ Sports:\n {sports}
             try:
                 br = self.sheets.get_bankroll()
                 data = self.sheets.get_overview()
-                roi = data.get('ROI', 0)
                 roi = float(roi) if isinstance(roi, float) else 0
                 avg_roi = data.get('Average ROI', 0)
                 avg_roi = float(avg_roi) if isinstance(avg_roi, float) else 0
@@ -1563,10 +1563,9 @@ Sports:\n {sports}
 
             self.send_message(f"""*Overview*\n\n \
 Bankroll: €{br:.2f}
-ROI: {roi:.2f}
-Average ROI: {avg_roi:.2f}
-Average EV: {avg_ev:.2f}
-Average winrate {avg_win:.2f}
+Average ROI: {avg_roi:.1%}
+Average EV: {avg_ev:.1%}
+Average winrate {avg_win:.1%}
 
 """
         )
@@ -1728,7 +1727,6 @@ class ValueBetScanner:
 
     def scan_once(self) -> List[ValueBet]:
         logger.info("Scanning...")
-        value_bets = []
         bankroll = self.get_bankroll()
 
         status = self.odds_client.get_key_status()
@@ -1740,6 +1738,7 @@ class ValueBetScanner:
             raise ValueError("No sport id's configured")
             
         for id in sport_ids:
+            value_bets = []
             tournaments = self.odds_client.get_tournaments(id)
             if tournaments is None:
                 logger.info("Stopping scanner due to unforseen problems")
@@ -1787,6 +1786,8 @@ class ValueBetScanner:
                         key = f"{bet.fixture_id}_{bet.soft_bookmaker}_{bet.outcome_id}"
 
                         if key not in self.confirmed_bet_keys:
+                            print("KEY NEW BET", key)
+                            print("KEY LOGGED BET", self.confirmed_bet_keys)
                             value_bets.append(bet)
 
                         #if key not in self.seen_bets:
@@ -1934,6 +1935,7 @@ def main():
     if not config.get('oddspapi_keys'):
         logger.error("API keys vereist")
         return
+
 
     scanner = ValueBetScanner(config)
 

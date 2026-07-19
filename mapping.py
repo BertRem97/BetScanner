@@ -37,8 +37,8 @@ MARKETS = {
             "10211": {
                 "Match resultaat 2de helft": {
                     '10211': 'Home',
-                    '10212': 'Away',
-                    '10213': 'Draw',
+                    '10212': 'Draw',
+                    '10213': 'Away',
 
                 }
             }
