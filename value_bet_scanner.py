@@ -157,13 +157,13 @@ class ValueBet:
             'League': self.tournament_name,
             'Soft Book': f"{self.soft_bookmaker} @ {self.soft_odds}",
             'Odds overzicht (soft)': odds_str,
-            'Sharp Ref (mediaan)': f"{self.sharp_odds:.3f}",
-            'EV %': f"{self.ev_percentage:.2f}%",
-            'Win Prob': f"{self.win_probability:.1%}",
-            'Stake Amount': f"{self.stake_amount:.2f}",
-            'Kelly %': f"{self.kelly_fraction:.2%}",
+            'Sharp Ref (mediaan)': round(self.sharp_odds, 2),
+            'EV %': round(self.ev_percentage / 100, 2),
+            'Win Prob': round(self.win_probability / 100 , 2),
+            'Stake Amount': round(self.stake_amount, 2),
+            'Kelly %': round(self.kelly_fraction, 2),
             'Betslip': self.betslip_url or '',
-            'Mogelijke winst': f"{self.soft_odds * self.stake_amount - self.stake_amount:.2f}",
+            'Mogelijke winst': round(self.soft_odds * self.stake_amount - self.stake_amount,2),
             'Settlement': self.settlement_status
         }
 
@@ -270,6 +270,19 @@ class OddsPapiClient:
                 return None
             response.raise_for_status()
             return response.json()
+        
+        except requests.exceptions.ConnectionError as e:
+            logger.warning(
+                f"Connection reset {e}"
+            )
+            time.sleep(3)
+            return self.get_tournaments(sport_id)
+
+        except requests.exceptions.ReadTimeout:
+            logger.warning("Oddspapi timeout, retrying...")
+            time.sleep(5)
+            return self.get_tournaments(sport_id)
+
         except Exception as e:
             logger.error(f"Error fetching tournaments: {e}")
             return []
@@ -294,6 +307,19 @@ class OddsPapiClient:
                 return None
             response.raise_for_status()
             return response.json()
+        
+        except requests.exceptions.ConnectionError as e:
+            logger.warning(
+                f"Connection reset {e}"
+            )
+            time.sleep(3)
+            return self.get_fixtures(tournament_id, days_ahead, has_odds)
+        
+        except requests.exceptions.ReadTimeout:
+            logger.warning("Oddspapi timeout, retrying...")
+            time.sleep(5)
+            return self.get_fixtures(tournament_id, days_ahead, has_odds)
+            
         except Exception as e:
 
             return []
@@ -305,6 +331,19 @@ class OddsPapiClient:
                 return None
             response.raise_for_status()
             return response.json()
+        
+        except requests.exceptions.ConnectionError as e:
+            logger.warning(
+                f"Connection reset {e}"
+            )
+            time.sleep(3)
+            return self.get_odds(fixture_id)
+
+        except requests.exceptions.ReadTimeout:
+            logger.warning("Oddspapi timeout, retrying...")
+            time.sleep(5)
+            return self.get_odds(fixture_id)
+
         except Exception as e:
             logger.error(f"Error fetching odds for {fixture_id}: {e}")
             return {}
@@ -429,7 +468,7 @@ class ValueBetCalculator:
 
         sport_id = str(fixture.get('sportId'))
         sport_data = mapping.get(sport_id, {})
-
+    
         if not sport_data:
             return value_bets
 
@@ -606,8 +645,8 @@ class GoogleSheetsManager:
             len_monthly_sheets = len(monthly_sheets)
 
             # 5 rijen voor B2:B6 en 5 rijen voor D2:D6
-            total_B = [0, 0, 0, 0, 0]
-            total_D = [0, 0, 0, 0, 0]
+            total_B = [0, 0, 0, 0, 0, 0]
+            total_D = [0, 0, 0, 0, 0, 0]
 
 
             for sheet_name in monthly_sheets:
@@ -615,7 +654,7 @@ class GoogleSheetsManager:
                 # Kolom B ophalen
                 result_B = self.service.spreadsheets().values().get(
                     spreadsheetId=self.spreadsheet_id,
-                    range=f"{sheet_name}!B2:B6"
+                    range=f"{sheet_name}!B2:B7"
                 ).execute()
 
                 values_B = result_B.get("values", [])
@@ -635,7 +674,7 @@ class GoogleSheetsManager:
                 # Kolom D ophalen
                 result_D = self.service.spreadsheets().values().get(
                     spreadsheetId=self.spreadsheet_id,
-                    range=f"{sheet_name}!D2:D6"
+                    range=f"{sheet_name}!D2:D7"
                 ).execute()
 
                 values_D = result_D.get("values", [])
@@ -654,7 +693,6 @@ class GoogleSheetsManager:
 
             # Resultaat samenvoegen voor Dashboard A2:D6
             output = []
-
             for i in range(5):
                 output.append([
                     "",              # A behoudt beschrijving
@@ -667,7 +705,7 @@ class GoogleSheetsManager:
             # Schrijf enkel B2:B6
             self.service.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
-                range=f"{main_sheet}!B2:B6",
+                range=f"{main_sheet}!F14:F19",
                 valueInputOption="USER_ENTERED",
                 body={
                     "values": [[value] for value in total_B]
@@ -677,7 +715,7 @@ class GoogleSheetsManager:
             # Schrijf enkel D2:D6
             self.service.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
-                range=f"{main_sheet}!D2:D6",
+                range=f"{main_sheet}!H14:H19",
                 valueInputOption="USER_ENTERED",
                 body={
                     "values": [[value] for value in total_D]
@@ -857,7 +895,7 @@ class GoogleSheetsManager:
                 spreadsheetId=self.spreadsheet_id,
                 range=f"'{sheet_name}'!A{self.first_data_row}",
                 valueInputOption='USER_ENTERED',
-                insertDataOption='INSERT_ROWS',
+                insertDataOption='OVERWRITE',
                 body={'values': [row]}
             ).execute()
             return True
@@ -947,7 +985,6 @@ class GoogleSheetsManager:
             desc, value = row[0], row[1]
             data[desc] = value
 
-        print(data)
         return data
 
     def get_bankroll(self) -> float:
@@ -1504,7 +1541,6 @@ Sports:\n {sports}
             try:
                 br = self.sheets.get_bankroll()
                 data = self.sheets.get_overview()
-                print(data)
                 roi = data.get('ROI', 0)
                 roi = float(roi) if isinstance(roi, float) else 0
                 avg_roi = data.get('Average ROI', 0)
@@ -1704,7 +1740,7 @@ class ValueBetScanner:
 
             active = [t for t in tournaments
                     if t.get('upcomingFixtures', 0) > 0 or t.get('futureFixtures', 0) > 0]
-
+  
             for tournament in active[:self.config.get('max_tournaments', 10)]:
                 if not self.is_scanning:
                     break
