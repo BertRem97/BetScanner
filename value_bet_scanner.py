@@ -646,7 +646,7 @@ class GoogleSheetsManager:
 
             # 5 rijen voor B2:B6 en 5 rijen voor D2:D6
             total_B = [0, 0, 0, 0, 0, 0]
-            total_D = [0, 0, 0, 0, 0, 0]
+            total_D = [0, 0, 0, 0, 0]
 
 
             for sheet_name in monthly_sheets:
@@ -654,7 +654,8 @@ class GoogleSheetsManager:
                 # Kolom B ophalen
                 result_B = self.service.spreadsheets().values().get(
                     spreadsheetId=self.spreadsheet_id,
-                    range=f"{sheet_name}!B2:B7"
+                    range=f"{sheet_name}!B2:B7",
+                    valueRenderOption="UNFORMATTED_VALUE"
                 ).execute()
 
                 values_B = result_B.get("values", [])
@@ -674,7 +675,8 @@ class GoogleSheetsManager:
                 # Kolom D ophalen
                 result_D = self.service.spreadsheets().values().get(
                     spreadsheetId=self.spreadsheet_id,
-                    range=f"{sheet_name}!D2:D7"
+                    range=f"{sheet_name}!D2:D7",
+                    valueRenderOption="UNFORMATTED_VALUE"
                 ).execute()
 
                 values_D = result_D.get("values", [])
@@ -702,7 +704,6 @@ class GoogleSheetsManager:
                 ])
 
 
-            # Schrijf enkel B2:B6
             self.service.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
                 range=f"{main_sheet}!F14:F19",
@@ -715,7 +716,7 @@ class GoogleSheetsManager:
             # Schrijf enkel D2:D6
             self.service.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
-                range=f"{main_sheet}!H14:H19",
+                range=f"{main_sheet}!H14:H18",
                 valueInputOption="USER_ENTERED",
                 body={
                     "values": [[value] for value in total_D]
@@ -726,7 +727,7 @@ class GoogleSheetsManager:
             # Aantal maandbladen opslaan
             self.service.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
-                range=f"{main_sheet}!B14",
+                range=f"{main_sheet}!C18",
                 valueInputOption="USER_ENTERED",
                 body={
                     "values": [[len_monthly_sheets]]
@@ -891,14 +892,21 @@ class GoogleSheetsManager:
         if sheet_name is None:
             sheet_name = self.get_or_create_monthly_sheet()
         try:
-            self.service.spreadsheets().values().append(
-                spreadsheetId=self.spreadsheet_id,
-                range=f"'{sheet_name}'!A{self.first_data_row}",
-                valueInputOption='USER_ENTERED',
-                insertDataOption='OVERWRITE',
-                body={'values': [row]}
+            result = self.service.spreadsheets().values().get(
+            spreadsheetId=self.spreadsheet_id,
+            range=f"'{sheet_name}'!A:A"
             ).execute()
+
+            next_row = len(result.get("values", [])) + 1
+            self.service.spreadsheets().values().update(
+            spreadsheetId=self.spreadsheet_id,
+            range=f"'{sheet_name}'!A{next_row}",
+            valueInputOption="USER_ENTERED",
+            body={"values": [row]}
+            ).execute()
+
             return True
+        
         except Exception as e:
             logger.error(f"Error appending row: {e}")
             return False
@@ -1055,6 +1063,7 @@ MANUAL_STEPS = [
     ('soft_book',    'Bookmaker (bijv. cashpoint):'),
     ('soft_odds',    'Odds bij bookmaker (bijv. 2.15):'),
     ('sharp_odds',   'Sharp referentie odds (mediaan, bijv. 2.00):'),
+    #('betslip',     'Betslip of - indien niet beschikbaar):')
 ]
 
 
@@ -1114,8 +1123,8 @@ class ManualBetSession:
             stake, kelly_pct = self.calculate_stake(
                 win_prob, soft_odds, bankroll, self.kelly_fraction)
 
-            betslip = d['betslip'] if d['betslip'] != '-' else None
-   
+            win_prob = win_prob * 100
+            #betslip = d['betslip'] if d['betslip'] != '-' else None
             return ValueBet(
                 fixture_id=f"manual_{datetime.now().strftime('%Y%m%d%H%M%S')}",
                 participant1=p1,
@@ -1139,7 +1148,7 @@ class ManualBetSession:
                 bankroll=bankroll,
                 kelly_fraction=kelly_pct,
                 timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                betslip_url=betslip,
+                betslip_url=None, #betslip
                 settlement_status='PENDING'
             )
 
@@ -1468,7 +1477,8 @@ class TelegramBot:
             f"Markt: {bet.market} | Uitkomst: *{bet.outcome}*\n\n"
             f"*Odds overzicht:*\n{odds_table}\n\n"
             f"*EV: {bet.ev_percentage:.2f}%*\n"
-            f"*Inzet: €{bet.stake_amount:.2f}*\n\n"
+            f"Win kans: {bet.win_probability}%\n\n"
+            f"*Inzet: €{bet.stake_amount:.2f}*\n"
             f"(Kelly: {bet.kelly_fraction:.2%} van {bet.bankroll:.0f})\n\n"
             f"Bet opslaan?"
         )
