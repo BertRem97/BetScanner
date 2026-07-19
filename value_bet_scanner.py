@@ -364,6 +364,18 @@ class OddsPapiClient:
                     return None
                 response.raise_for_status()
                 self.settlements.append(response.json())
+                
+        except requests.exceptions.ConnectionError as e:
+            logger.warning(
+                f"Connection reset {e}"
+            )
+            time.sleep(3)
+            return self.get_settlements(fixture_ids)
+
+        except requests.exceptions.ReadTimeout:
+            logger.warning("Oddspapi timeout, retrying...")
+            time.sleep(5)
+            return self.get_settlements(fixture_ids)
 
         except Exception as e:
             logger.error(f"Error fetching settlements: {e}")
@@ -736,10 +748,16 @@ class GoogleSheetsManager:
 
             logger.info("Main sheet totals updated")
             return "Dashboard totals succesvol bijgewerkt"
+        
+        except requests.exceptions.ReadTimeout:
+            logger.warning("Oddspapi timeout, retrying...")
+            time.sleep(5)
+            return self.update_main_sheet_totals()
 
         except Exception as e:
             logger.error(f"Error updating totals: {e}")
             return "Dashboard totals niet kunnen bijwerken"
+
 
     def _fetch_sheet_meta(self) -> List[Dict]:
         """Single API call — returns the sheets array from spreadsheet metadata."""
@@ -1710,7 +1728,6 @@ class ValueBetScanner:
 
                     if self.sheets:
                         succes = self.sheets.update_settlement(fid, status)
-
                         if succes:
                             if status != "UNKNOWN":
                                 bet['status'] = "closed"
