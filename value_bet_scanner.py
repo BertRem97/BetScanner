@@ -1817,7 +1817,7 @@ def main():
     parser.add_argument('--config', default='config.json')
     parser.add_argument('--interactive', action='store_true',
                         help='Telegram interactive mode')
-    parser.add_argument('--sport', type=int, nargs='+', default=[10, 11, 13, 19], help="Sport ID's")
+    parser.add_argument('--sport', type=int, nargs='+', default=[10, 11, 13], help="Sport ID's")
     parser.add_argument('--ev', type=float, default=10)
 
     args = parser.parse_args()
