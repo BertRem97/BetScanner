@@ -186,7 +186,7 @@
   "min_ev_threshold": 10,
   "kelly_fraction": 0.20,
   "bankroll": 1000,
-  "sport_id": [10, 13, 11, 19],
+  "sport_id": [10, 13, 11],
   "max_tournaments": 20,
   "days_ahead": 30,
   "request_delay": 1.0,

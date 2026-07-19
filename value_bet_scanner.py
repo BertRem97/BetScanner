@@ -295,7 +295,7 @@ class OddsPapiClient:
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            logger.error(f"Error fetching fixtures: {e}")
+
             return []
 
     def get_odds(self, fixture_id: str) -> Dict:
@@ -935,6 +935,20 @@ class GoogleSheetsManager:
                 pending += 1
 
         return {'total': total, 'wins': wins, 'losses': losses, 'pending': pending}
+    
+    def get_overview(self) -> float:
+        result = self.service.spreadsheets().values().get(
+                spreadsheetId=self.spreadsheet_id,
+                range='Dashboard!A9:B15'
+            ).execute()
+        
+        data = {}
+        for row in result.get('values', []):
+            desc, value = row[0], row[1]
+            data[desc] = value
+
+        print(data)
+        return data
 
     def get_bankroll(self) -> float:
         if not self.available:
@@ -1096,15 +1110,17 @@ class ManualBetSession:
 class TelegramBot:
     """Telegram bot with commands, notifications, and manual bet entry"""
 
-    def __init__(self, bot_token: str, chat_id: str,
+    def __init__(self, config: dict,
                  sheets: GoogleSheetsManager = None):
-        self.bot_token = bot_token
-        self.chat_id = chat_id
-        self.base_url = f"https://api.telegram.org/bot{bot_token}"
+        self.bot_token = config['telegram_bot_token']
+        self.chat_id = config['telegram_chat_id']
+        self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
         self.sheets = sheets
         self.pending_bets: Dict[int, ValueBet] = {}
         self.last_update_id = 0
         self._scanner = None
+        self.config = config
+    
         # Per-chat manual entry sessions
         self._manual_sessions: Dict[str, ManualBetSession] = {}
 
@@ -1338,7 +1354,8 @@ class TelegramBot:
             '/stop':     lambda: {'action': 'stop'},
             '/profit':   self._cmd_profit,
             '/keys':     self._cmd_keys,
-            '/bankroll': self._cmd_bankroll,
+            '/overview': self._cmd_overview,
+            '/show_config': self._cmd_show_config,
             '/set':      lambda: {'action': 'set'},
             '/manueel':  lambda: self._cmd_manueel(chat_id),
             '/annuleer': lambda: self._cmd_annuleer(chat_id),
@@ -1433,6 +1450,24 @@ class TelegramBot:
     # ------------------------------------------------------------------
     # Command implementations
     # ------------------------------------------------------------------
+    def _cmd_show_config(self) -> Dict:
+
+        sports = "\n".join(
+            next(iter(mapping[str(id)]))
+            for id in self.config.get("sport_id", [])
+            )
+
+        msg = f"""*Settings*\n\n
+Min ev threshold: {self.config.get('min_ev_threshold', 0)}
+Kelly f: {self.config.get('kelly_fraction', 0)}
+Max tournaments: {self.config.get('max_tournaments', 0)}
+Days ahead: {self.config.get('days_ahead', 0)}
+Sports:\n {sports}
+        """
+
+        self.send_message(msg)
+        return {'action': 'config'}
+
 
     def _cmd_profit(self) -> Dict:
         if self.sheets:
@@ -1464,10 +1499,32 @@ class TelegramBot:
             self.send_message("Scanner niet beschikbaar")
         return {'action': 'keys'}
 
-    def _cmd_bankroll(self) -> Dict:
+    def _cmd_overview(self) -> Dict:
         if self.sheets:
-            br = self.sheets.get_bankroll()
-            self.send_message(f"*Bankroll*\n\n{br:.2f}")
+            try:
+                br = self.sheets.get_bankroll()
+                data = self.sheets.get_overview()
+                print(data)
+                roi = data.get('ROI', 0)
+                roi = float(roi) if isinstance(roi, float) else 0
+                avg_roi = data.get('Average ROI', 0)
+                avg_roi = float(avg_roi) if isinstance(avg_roi, float) else 0
+                avg_ev = float(data.get('Average EV', 0))
+                avg_win = float(data.get('Average winrate', 0))
+
+            except:
+                pass
+
+            self.send_message(f"""*Overview*\n\n \
+Bankroll: €{br:.2f}
+ROI: {roi:.2f}
+Average ROI: {avg_roi:.2f}
+Average EV: {avg_ev:.2f}
+Average winrate {avg_win:.2f}
+
+"""
+        )
+            
         else:
             self.send_message("Google Sheets niet geconfigureerd")
         return {'action': 'bankroll'}
@@ -1481,7 +1538,7 @@ class TelegramBot:
             "/annuleer - Manuele invoer annuleren\n"
             "/profit - Winst/verlies overzicht\n"
             "/keys - API key gebruik\n"
-            "/bankroll - Bankroll weergeven\n"
+            "/overiew - Toon totaaloverzicht\n"
             "/set - Settlements bijwerken\n"
             "/help - Dit overzicht"
         )
@@ -1525,14 +1582,14 @@ class ValueBetScanner:
             self.sheets = GoogleSheetsManager(
                 config['google_credentials_path'],
                 config['google_spreadsheet_id']
+                
             )
             self.sheets.ensure_template_sheet()
 
         self.telegram = None
         if config.get('telegram_bot_token') and config.get('telegram_chat_id'):
             self.telegram = TelegramBot(
-                config['telegram_bot_token'],
-                config['telegram_chat_id'],
+                config,
                 self.sheets
             )
             self.telegram.set_scanner(self)
@@ -1579,6 +1636,7 @@ class ValueBetScanner:
         if self.sheets:
             return self.sheets.get_bankroll()
         return float(self.config.get('bankroll', 500))
+    
 
     def update_settlements(self) -> str:
         if not self.confirmed_bets:
@@ -1787,27 +1845,10 @@ def load_config(path: str = 'config.json') -> Dict:
 
     if Path(path).exists():
         config = json.load(open(path))
-   
-    
     else:
-        keys_str = os.getenv('ODDSPAPI_KEYS', os.getenv('ODDSPAPI_KEY', ''))
-        if keys_str:
-            config['oddspapi_keys'] = [k.strip() for k in keys_str.split(',') if k.strip()]
-
-        config.setdefault('telegram_bot_token', os.getenv('TELEGRAM_BOT_TOKEN', ''))
-        config.setdefault('telegram_chat_id', os.getenv('TELEGRAM_CHAT_ID', ''))
-        config.setdefault('google_credentials_path', os.getenv('GOOGLE_CREDENTIALS_PATH', ''))
-        config.setdefault('google_spreadsheet_id', os.getenv('GOOGLE_SPREADSHEET_ID', ''))
-        config.setdefault('min_ev_threshold', float(os.getenv('MIN_EV_THRESHOLD', '2.0')))
-        config.setdefault('kelly_fraction', float(os.getenv('KELLY_FRACTION', '0.25')))
-        config.setdefault('bankroll', float(os.getenv('BANKROLL', '1000')))
-        config.setdefault('sport_id', int(os.getenv('SPORT_ID', '10')))
-        config.setdefault('max_tournaments', int(os.getenv('MAX_TOURNAMENTS', '10')))
-        config.setdefault('days_ahead', int(os.getenv('DAYS_AHEAD', '7')))
-        config.setdefault('request_delay', float(os.getenv('REQUEST_DELAY', '1')))
-        config.setdefault('scan_interval', int(os.getenv('SCAN_INTERVAL', '300')))
-        config.setdefault('requests_per_key', int(os.getenv('REQUESTS_PER_KEY', '250')))
-
+        logger.warning(f"No configuration file {path} found")
+        return None
+    
     return config
 
 
@@ -1817,21 +1858,32 @@ def main():
     parser.add_argument('--config', default='config.json')
     parser.add_argument('--interactive', action='store_true',
                         help='Telegram interactive mode')
-    parser.add_argument('--sport', type=int, nargs='+', default=[10, 11, 13], help="Sport ID's")
-    parser.add_argument('--ev', type=float, default=10)
+    parser.add_argument('--sport', type=int, nargs='+', help="Sport ID's")
+    parser.add_argument('--ev', type=float, help='Minimum EV per bet')
+    parser.add_argument('--days', type=float, help='Aantal dagen voorgaand de matches')
+    parser.add_argument('--max_tournaments', type=float, help="Maximum aantal te verwerken tournaments")
+    parser.add_argument('--kelly', type=float, help='Fractie van kelly om stake te bepalen, default: 0.2')
 
     args = parser.parse_args()
     config = load_config(args.config)
-    config['sport_id'] = args.sport
+    if config is None:
+        return
 
     if args.sport is not None:
-        if isinstance(args.sport, list):
-            config["sport_id"] = args.sport
-        else:
-            config["sport_id"] = [args.sport]
+        config["sport_id"] = [args.sport]
+      
+    if args.ev is not None:
+        config['min_ev_threshold'] = args.ev
+    
+    if args.days is not None:
+        config['days_ahead'] = args.days
+    
+    if args.kelly is not None:
+        config['kelly_fraction'] = args.kelly
 
+    if args.max_tournaments is not None:
+        config['max_tournaments'] = args.max_tournaments
 
-    config['min_ev_threshold'] = args.ev
 
     if not config.get('oddspapi_keys'):
         logger.error("API keys vereist")
