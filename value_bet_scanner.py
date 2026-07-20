@@ -364,6 +364,7 @@ class OddsPapiClient:
                     return None
                 response.raise_for_status()
                 self.settlements.append(response.json())
+
                 
         except requests.exceptions.ConnectionError as e:
             logger.warning(
@@ -1081,7 +1082,7 @@ MANUAL_STEPS = [
     ('outcome',      'Uitkomst (bijv. Home / Draw / Away):'),
     ('soft_book',    'Bookmaker (bijv. cashpoint):'),
     ('soft_odds',    'Odds bij bookmaker (bijv. 2.15):'),
-    ('sharp_odds',   'Sharp referentie odds (mediaan, bijv. 2.00):'),
+    ('sharp_odds',   'Sharp referentie win kans (bijv. 40%)):'),
     #('betslip',     'Betslip of - indien niet beschikbaar):')
 ]
 
@@ -1134,7 +1135,7 @@ class ManualBetSession:
         p2 = parts[1].strip() if len(parts) > 1 else ''
         soft_odds = float(d['soft_odds'])
         sharp_odds = float(d['sharp_odds'])
-        win_prob = 1 / sharp_odds if sharp_odds > 0 else 0
+        win_prob = sharp_odds / 100 if sharp_odds > 0 else 0
         sport = d['sport']
 
         ev = ((win_prob * soft_odds) - 1) * 100
@@ -1285,6 +1286,7 @@ class TelegramBot:
             f"*EV: {bet.ev_percentage:.2f}%*\n"
             f"Win kans: {bet.win_probability:.1%}\n\n"
             f"*Inzet: €{bet.stake_amount:.2f}*\n"
+            f"Mogelijke winst: €{bet.stake_amount * bet.soft_odds - bet.stake_amount:.2f}\n"
             f"(Kelly: {bet.kelly_fraction:.2%} van {bet.bankroll:.0f})\n\n"
             f"{betslip_line}"
         )
@@ -1498,6 +1500,7 @@ class TelegramBot:
             f"*EV: {bet.ev_percentage:.2f}%*\n"
             f"Win kans: {bet.win_probability:.1%}\n\n"
             f"*Inzet: €{bet.stake_amount:.2f}*\n"
+            f"Mogelijke winst: €{bet.stake_amount * bet.soft_odds - bet.stake_amount:.2f}\n"
             f"(Kelly: {bet.kelly_fraction:.2%} van {bet.bankroll:.0f})\n\n"
             f"Bet opslaan?"
         )
@@ -1600,7 +1603,6 @@ Average winrate {avg_win:.1%}
             "/manueel - Bet handmatig invoeren\n"
             "/annuleer - Manuele invoer annuleren\n"
             "/profit - Winst/verlies overzicht\n"
-            "/keys - API key gebruik\n"
             "/overiew - Toon totaaloverzicht\n"
             "/set - Settlements bijwerken\n"
             "/help - Dit overzicht"
@@ -1717,6 +1719,11 @@ class ValueBetScanner:
                 market_id = bet['market_id']
 
                 if fid == i['fixtureId'] and bet['status'] == 'open':
+                    x = i.get("markets", {}).get(market_id, {})
+                    print(fid)
+                    print(market_id)
+                    pprint(x)
+
                     result = i.get("markets",{}).get(market_id, {}).get("outcomes", {}).get(outcome_id, {}).get("players", {}).get("0", {}).get("result", 'UNKNOWN')
 
                     status = result.upper()
@@ -1803,8 +1810,6 @@ class ValueBetScanner:
                         key = f"{bet.fixture_id}_{bet.soft_bookmaker}_{bet.outcome_id}"
 
                         if key not in self.confirmed_bet_keys:
-                            print("KEY NEW BET", key)
-                            print("KEY LOGGED BET", self.confirmed_bet_keys)
                             value_bets.append(bet)
 
                         #if key not in self.seen_bets:
