@@ -91,14 +91,14 @@ MARKETS = {
             }
         }
     },
-    '18': {
-        'Esports - League of Ledgends': {
-            '181': {
-            'Winnaar': {
-                    '181': 'Home',
-                    '182': 'Away'
-                }
-            }   
-        }
-    }
+    #'18': { #Thuis / Uit staan gewisseld bij bookmaker bc.game
+        #'Esports - League of Ledgends': {
+            #'181': {
+            #'Winnaar': {
+                    #'181': 'Home',
+                    #'182': 'Away'
+                #}
+            #}   
+        #}
+    #}
 }

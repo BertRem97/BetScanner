@@ -1661,10 +1661,7 @@ class ValueBetScanner:
 
         self.seen_bets: set = set()
         self.confirmed_bets: List[Dict] = []
-        self.confirmed_bet_keys = {
-            f"{b['fixture_id']}_{b['soft_bookmaker']}_{b['outcome_id']}"
-            for b in self.confirmed_bets
-}
+ 
         self._load_seen()
 
     def _load_seen(self):
@@ -1675,6 +1672,12 @@ class ValueBetScanner:
                 for line in open('confirmed_bets.jsonl'):
                     if line.strip():
                         self.confirmed_bets.append(json.loads(line))
+
+                self.confirmed_bet_keys = {
+                    f"{b['fixture_id']}_{b['soft_bookmaker']}_{b['outcome_id']}"
+                    for b in self.confirmed_bets
+                
+                }
         except Exception:
             pass
 
