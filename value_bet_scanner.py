@@ -1671,16 +1671,17 @@ class ValueBetScanner:
         try:
             if Path('seen_bets.json').exists():
                 self.seen_bets = set(json.load(open('seen_bets.json')))
-            if Path('confirmed_bets.jsonl').exists():
-                for line in open('confirmed_bets.jsonl'):
-                    if line.strip():
-                        self.confirmed_bets.append(json.loads(line))
+            if Path('confirmed_bets.json').exists():
+                with open('confirmed_bets.json') as f:
+                    self.confirmed_bets = json.load(f)
 
                 self.confirmed_bet_keys = {
                     f"{b['fixture_id']}_{b['soft_bookmaker']}_{b['outcome_id']}"
                     for b in self.confirmed_bets
                 
                 }
+            
+            
         except Exception:
             pass
 
@@ -1700,7 +1701,7 @@ class ValueBetScanner:
         }
 
         self.confirmed_bets.append(data)
-        with open('confirmed_bets.jsonl', 'a') as f:
+        with open('confirmed_bets.json', 'a') as f:
             f.write(json.dumps(data) + '\n')
 
     def get_bankroll(self) -> float:
@@ -1710,63 +1711,63 @@ class ValueBetScanner:
     
 
     def update_settlements(self) -> str:
+        print(self.confirmed_bets)
         if not self.confirmed_bets:
             return "Geen bets om bij te werken"
 
         fixture_ids = [b['fixture_id'] for b in self.confirmed_bets
                        if not b['fixture_id'].startswith('manual_')]
         
-        self.settlements = self.odds_client.get_settlements(fixture_ids)
+        self.odds_client.get_settlements(fixture_ids)
         updated = wins = losses = 0
         
-        settlement_map = {
-            s['fixtureId']: s 
-            for s in self.settlements
-        }
+        print(self.settlements)
 
-        for bet in self.confirmed_bets:
-            fid = bet['fixture_id']
+         
+        for i in self.settlements:
+            for bet in self.confirmed_bets:
+                fid = bet['fixture_id']
 
-            if fid not in settlement_map:
-                continue
+                if fid != i['fixtureId']:
+                    continue
 
-            outcome_id = bet['outcome_id']
-            market_id = bet['market_id']
+                outcome_id = bet['outcome_id']
+                market_id = bet['market_id']
+               
+                if (fid == i['fixtureId'] and bet['status'] == 'open'):
+                    x = i.get("markets", {}).get(market_id, {})
+                    print(fid)
+                    print(market_id)
+                    pprint(x)
 
-            if fid == settlement_map['fixtureId'] and bet['status'] == 'open':
-                x = settlement_map['fixtureId'].get("markets", {}).get(market_id, {})
-                print(fid)
-                print(market_id)
-                pprint(x)
+                    result = i.get("markets",{}) \
+                        .get(market_id, {}) \
+                        .get("outcomes", {}).get(outcome_id, {}) \
+                        .get("players", {}).get("0", {}) \
+                        .get("result", 'UNKNOWN')
 
-                result = settlement_map['fixtureId'].get("markets",{}) \
-                    .get(market_id, {}) \
-                    .get("outcomes", {}).get(outcome_id, {}) \
-                    .get("players", {}).get("0", {}) \
-                    .get("result", 'UNKNOWN')
+                    status = str(result.upper())
+                    pprint((status, fid, outcome_id))
+                    if 'WIN' in status:
+                        wins += 1
+                    elif 'LOSE' in status:
+                        losses += 1
 
-                status = str(result.upper())
-                pprint((status, fid, outcome_id))
-                if 'WIN' in status:
-                    wins += 1
-                elif 'LOSE' in status:
-                    losses += 1
+                    if self.sheets:
+                        succes = self.sheets.update_settlement(fid, status)
+                        if succes:
+                            if status != "UNDECIDED":
+                                if (
+                                    bet['fixture_id'] == fid
+                                    and bet['market_id'] == market_id
+                                    and bet['outcome_id'] == outcome_id
+                                    ):
+                                    bet['status'] = 'closed'
+                            
+                                with open('confirmed_bets.json', 'w') as f:
+                                    json.dump(self.confirmed_bets, f, indent=2)
 
-                if self.sheets:
-                    succes = self.sheets.update_settlement(fid, status)
-                    if succes:
-                        if status != "UNKNOWN":
-                            if (
-                                bet['fixture_id'] == fid
-                                and bet['market_id'] == market_id
-                                and bet['outcome_id'] == outcome_id
-                                ):
-                                bet['status'] = 'closed'
-                        
-                            with open('confirmed_bets.json', 'w') as f:
-                                json.dump(self.confirmed_bets, f, indent=2)
-
-                        updated += 1
+                            updated += 1
 
         return f"Bijgewerkt: {updated}\nGewonnen: {wins}\nVerloren: {losses}"
     
