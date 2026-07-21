@@ -1435,6 +1435,9 @@ class TelegramBot:
                 self.send_message("*Scanner GESTART*", chat_id=chat_id)
             elif cmd == '/stop':
                 self.send_message("*Scanner GESTOPT*", chat_id=chat_id)
+            elif cmd == '/set':
+                 self.send_message("*Updating settlements...", chat_id=chat_id)
+                
             return handler()
         return None
 
@@ -1712,37 +1715,58 @@ class ValueBetScanner:
 
         fixture_ids = [b['fixture_id'] for b in self.confirmed_bets
                        if not b['fixture_id'].startswith('manual_')]
-        self.odds_client.get_settlements(fixture_ids)
+        
+        self.settlements = self.odds_client.get_settlements(fixture_ids)
         updated = wins = losses = 0
+        
+        settlement_map = {
+            s['fixtureId']: s 
+            for s in self.settlements
+        }
 
-        for i in self.settlements:
-            for bet in self.confirmed_bets:
-                fid = bet['fixture_id']
-                outcome_id = bet['outcome_id']
-                market_id = bet['market_id']
+        for bet in self.confirmed_bets:
+            fid = bet['fixture_id']
 
-                if fid == i['fixtureId'] and bet['status'] == 'open':
-                    x = i.get("markets", {}).get(market_id, {})
-                    print(fid)
-                    print(market_id)
-                    pprint(x)
+            if fid not in settlement_map:
+                continue
 
-                    result = i.get("markets",{}).get(market_id, {}).get("outcomes", {}).get(outcome_id, {}).get("players", {}).get("0", {}).get("result", 'UNKNOWN')
+            outcome_id = bet['outcome_id']
+            market_id = bet['market_id']
 
-                    status = result.upper()
-                    pprint((status, fid, outcome_id))
-                    if 'WIN' in status:
-                        wins += 1
-                    elif 'LOSE' in status:
-                        losses += 1
+            if fid == settlement_map['fixtureId'] and bet['status'] == 'open':
+                x = settlement_map['fixtureId'].get("markets", {}).get(market_id, {})
+                print(fid)
+                print(market_id)
+                pprint(x)
 
-                    if self.sheets:
-                        succes = self.sheets.update_settlement(fid, status)
-                        if succes:
-                            if status != "UNKNOWN":
-                                bet['status'] = "closed"
+                result = settlement_map['fixtureId'].get("markets",{}) \
+                    .get(market_id, {}) \
+                    .get("outcomes", {}).get(outcome_id, {}) \
+                    .get("players", {}).get("0", {}) \
+                    .get("result", 'UNKNOWN')
 
-                            updated += 1
+                status = str(result.upper())
+                pprint((status, fid, outcome_id))
+                if 'WIN' in status:
+                    wins += 1
+                elif 'LOSE' in status:
+                    losses += 1
+
+                if self.sheets:
+                    succes = self.sheets.update_settlement(fid, status)
+                    if succes:
+                        if status != "UNKNOWN":
+                            if (
+                                bet['fixture_id'] == fid
+                                and bet['market_id'] == market_id
+                                and bet['outcome_id'] == outcome_id
+                                ):
+                                bet['status'] = 'closed'
+                        
+                            with open('confirmed_bets.json', 'w') as f:
+                                json.dump(self.confirmed_bets, f, indent=2)
+
+                        updated += 1
 
         return f"Bijgewerkt: {updated}\nGewonnen: {wins}\nVerloren: {losses}"
     
@@ -1813,11 +1837,8 @@ class ValueBetScanner:
                         key = f"{bet.fixture_id}_{bet.soft_bookmaker}_{bet.outcome_id}"
 
                         if key not in self.confirmed_bet_keys:
+                            print("KEY", key, self.confirmed_bet_keys)
                             value_bets.append(bet)
-
-                        #if key not in self.seen_bets:
-                            #value_bets.append(bet)
-                            #self.seen_bets.add(key)
 
                     time.sleep(self.config.get('request_delay', 1))
 
