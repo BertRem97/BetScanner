@@ -175,7 +175,7 @@ class OddsPapiClient:
 
 
     SOFT_BOOKMAKERS = [#cashpoint.be --> betcenter.be
-        'cashpoint', 'unibet', 'pinnacle', 'goldenpalacesports.be',
+        'cashpoint', 'unibet', 'ladbrokes.be','betfirst.be', 'goldenpalacesports.be',
         'bcgame', 'bwin.be', 'napoleonsports.be'
 
         #ladbrokes.be
@@ -187,7 +187,7 @@ class OddsPapiClient:
 
     # Sharp books used only for median reference, NOT as bet targets
     SHARP_BOOKMAKERS = [
-        'pinnacle', 'unibet', 'sbobet', 'betano', 'bwin.be'
+        'pinnacle', 'unibet', 'sbobet', 'bet365', 'bwin.be'
     ]
 
     def __init__(self, api_keys, settlements, requests_per_key: int = 250):
@@ -1701,8 +1701,14 @@ class ValueBetScanner:
         }
 
         self.confirmed_bets.append(data)
-        with open('confirmed_bets.json', 'a') as f:
-            f.write(json.dumps(data) + '\n')
+        with open('confirmed_bets.json', 'r') as f:
+            bets = json.load(f)
+        
+        bets.append(data)
+
+        with open('confirmed_bets.json', 'w') as f:
+            json.dump(bets, f, indent=2)
+        
 
     def get_bankroll(self) -> float:
         if self.sheets:
@@ -1711,7 +1717,6 @@ class ValueBetScanner:
     
 
     def update_settlements(self) -> str:
-        print(self.confirmed_bets)
         if not self.confirmed_bets:
             return "Geen bets om bij te werken"
 
