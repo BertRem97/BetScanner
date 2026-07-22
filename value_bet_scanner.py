@@ -175,7 +175,7 @@ class OddsPapiClient:
 
 
     SOFT_BOOKMAKERS = [#cashpoint.be --> betcenter.be
-        'cashpoint', 'unibet', 'ladbrokes.be','betfirst.be', 'goldenpalacesports.be',
+        'cashpoint', 'unibet', 'ladbrokes.be','betano', 'goldenpalacesports.be',
         'bcgame', 'bwin.be', 'napoleonsports.be'
 
         #ladbrokes.be
@@ -1435,7 +1435,7 @@ class TelegramBot:
                 self.send_message("*Scanner GESTART*", chat_id=chat_id)
             elif cmd == '/stop':
                 self.send_message("*Scanner GESTOPT*", chat_id=chat_id)
-            elif cmd == '/set':
+            if cmd == '/set':
                  self.send_message("*Updating settlements...", chat_id=chat_id)
                 
             return handler()
@@ -1726,9 +1726,7 @@ class ValueBetScanner:
         self.odds_client.get_settlements(fixture_ids)
         updated = wins = losses = 0
         
-        print(self.settlements)
 
-         
         for i in self.settlements:
             for bet in self.confirmed_bets:
                 fid = bet['fixture_id']
@@ -1843,7 +1841,6 @@ class ValueBetScanner:
                         key = f"{bet.fixture_id}_{bet.soft_bookmaker}_{bet.outcome_id}"
 
                         if key not in self.confirmed_bet_keys:
-                            print("KEY", key, self.confirmed_bet_keys)
                             value_bets.append(bet)
 
                     time.sleep(self.config.get('request_delay', 1))
@@ -1902,6 +1899,8 @@ class ValueBetScanner:
                                 self._log_bet(bet)
 
                         elif action == 'set':
+                            logger.info("Updateing settlements")
+                            self.telegram.send_message("Settlements bijwerken...")
                             msg = self.update_settlements()
                             msg_dashboard = self.update_main_sheet_totals()
                             self.telegram.send_message(f"*Settlements*\n\n{msg}")

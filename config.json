@@ -207,7 +207,15 @@
   "43dd10c9-973f-4341-9484-fe497a68b7d5", "bbe096c2-203a-458b-9b65-2ae270b73450",
   "1d942250-1e01-4b31-837b-069eaf25bf57", "948cf6e6-37a5-47d5-bc8b-80efbb3074f5",
   "a303dc77-2e4a-4697-9443-592814a502d9", "c41f9487-6065-491f-bd4d-239b2397e251",
-  "11a39f4a-63aa-4454-99c4-0786b31604f4", "cc157495-e096-4a3c-be3d-12ef723ec14c"
+  "11a39f4a-63aa-4454-99c4-0786b31604f4", "cc157495-e096-4a3c-be3d-12ef723ec14c",
+  "09204216-b8a2-4bcb-9bae-40f370d1d358", "01e6d3a1-fcf2-4fb1-8be8-757fb2c6a6da",
+  "9643c7b3-70f4-48b5-b925-674155b5278b", "badc3ec7-239d-475b-87de-bc398d2c58c8",
+  "dd3f3d81-ff70-4b27-86ed-61ead7d6ebae", "e36e67b5-6559-4668-b4ed-cfd321c8e99f",
+  "ff4f1172-995e-403e-8a97-e09587f8b3c0", "5607c12a-4353-475a-83a1-2825cca80602",
+  "111bc89a-b036-4d6e-8124-0b8da46d56a8", "4188c793-af34-47e9-8353-b3103a856c5d",
+  "3a5e650b-ae42-47f0-a33c-078ae46b3bf1", "ddd75755-8a5c-4a77-a2d7-bb2f721afc18",
+  "84547bcf-7386-4fe3-aea1-64b1ed67de90", "fae12c46-4018-4f0b-afac-fe4bd0eda0ff", 
+  "a6340fb6-dd4a-44c7-bbd3-7cd72d68ac1b"
 
   ],
   "SOFT_BOOKMAKERS": ["cashpoint", "unibet", "pinnacle", "goldenpalacesports.be","bcgame", "bwin.be", "napoleonsports.be"],
@@ -222,7 +230,7 @@
   "bankroll": 1000,
   "sport_id": [10, 13, 11, 19, 14],
   "max_tournaments": 50,
-  "days_ahead": 30,
+  "days_ahead": 7,
   "request_delay": 1.0,
   "scan_interval": 300,
   "vpn": {
