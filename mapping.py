@@ -41,8 +41,28 @@ MARKETS = {
                     '10213': 'Away',
 
                 }
-            }
-        }
+            },
+            '108': {
+                'Totaal aantal doelpunten': {
+                    '108': 'Meer dan 1.5',
+                    '109': 'Minder dan 1.5',
+                }
+            },
+            '1010': {
+                'Totaal aantal doelpunten': {
+                    '1011': 'Minder dan 2.5',
+                    '1010': 'Meer dan 2.5',
+                }
+            },
+            '1012': {
+                'Totaal aantal doelpunten': {
+                    '1012': 'Meer dan 3.5',
+                    '1013': 'Minder dan 3.5'
+    
+                }
+            },
+            
+        }   
     },
     '11': {
         'Basketbal': {
@@ -101,4 +121,21 @@ MARKETS = {
             #}   
         #}
     #}
+    '31': {
+        'Aussie Rules': {
+            '313': {
+                '1X2 (Full time result)': {
+                    '313': 'Away',
+                    '314': 'Draw',
+                    '315': 'Home'
+                }
+            },
+            '311': {
+                'Winnaar': {
+                    '311': 'Home',
+                    '312': 'Away'
+                }
+            }
+        }
+    }
 }
