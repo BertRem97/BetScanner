@@ -175,8 +175,8 @@ class OddsPapiClient:
 
 
     SOFT_BOOKMAKERS = [#cashpoint.be --> betcenter.be
-        'cashpoint', 'unibet', 'ladbrokes.be','betano', 'goldenpalacesports.be',
-        'bcgame', 'bwin.be', 'napoleonsports.be'
+        'cashpoint', 'unibet.be', 'starcasino.be', 'ladbrokes.be','betano', 'goldenpalacesports.be',
+        'bwin.be', 'napoleonsports.be', 'bet365', 'betway'
 
         #ladbrokes.be
         #betcenter.be, 
@@ -187,7 +187,7 @@ class OddsPapiClient:
 
     # Sharp books used only for median reference, NOT as bet targets
     SHARP_BOOKMAKERS = [
-        'pinnacle', 'sbobet', 'bet365', 'bwin.be', 'betfair-ex'
+        'pinnacle', 'sbobet', 'bet365', 'bwin.be', 'betonline.ag'
     ]
 
     def __init__(self, api_keys, settlements, requests_per_key: int = 250):
