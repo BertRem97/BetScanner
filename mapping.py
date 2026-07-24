@@ -125,9 +125,9 @@ MARKETS = {
         'Aussie Rules': {
             '313': {
                 '1X2 (Full time result)': {
-                    '313': 'Away',
+                    '315': 'Away',
                     '314': 'Draw',
-                    '315': 'Home'
+                    '313': 'Home'
                 }
             },
             '311': {

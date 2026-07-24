@@ -187,7 +187,7 @@ class OddsPapiClient:
 
     # Sharp books used only for median reference, NOT as bet targets
     SHARP_BOOKMAKERS = [
-        'pinnacle', 'unibet', 'sbobet', 'bet365', 'bwin.be'
+        'pinnacle', 'sbobet', 'bet365', 'bwin.be', 'betfair-ex'
     ]
 
     def __init__(self, api_keys, settlements, requests_per_key: int = 250):
