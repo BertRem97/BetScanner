@@ -1004,7 +1004,7 @@ class GoogleSheetsManager:
     def get_overview(self) -> float:
         result = self.service.spreadsheets().values().get(
                 spreadsheetId=self.spreadsheet_id,
-                range='Dashboard!A14:C19',
+                range='Dashboard!A14:C20',
                 valueRenderOption="UNFORMATTED_VALUE"
 
             ).execute()
@@ -1023,13 +1023,18 @@ class GoogleSheetsManager:
         try:
             result = self.service.spreadsheets().values().get(
                 spreadsheetId=self.spreadsheet_id,
-                range='Dashboard!A1:B20'
+                range='Dashboard!A14:C20',
+                valueRenderOption="UNFORMATTED_VALUE"
+
             ).execute()
+
             for row in result.get('values', []):
                 if len(row) >= 2 and row[0].lower().strip() == 'bankroll':
-                    return float(row[1])
+                    bankroll = float(row[2])
+                    return bankroll
         except Exception:
             pass
+
         return 500
 
     def update_settlement(self, fixture_id: str, settlement: str,
@@ -1201,6 +1206,7 @@ class TelegramBot:
 
     def send_message(self, text: str, chat_id: str = None,
                      keyboard: Dict = None) -> Optional[int]:
+
         cid = chat_id or self.chat_id
         payload: Dict = {
             "chat_id": cid,
@@ -1575,30 +1581,29 @@ Sports:\n {sports}
 
     def _cmd_overview(self) -> Dict:
         if self.sheets:
-            try:
-                br = self.sheets.get_bankroll()
-                data = self.sheets.get_overview()
-                roi = float(roi) if isinstance(roi, float) else 0
-                avg_roi = data.get('Average ROI', 0)
-                avg_roi = float(avg_roi) if isinstance(avg_roi, float) else 0
-                avg_ev = float(data.get('Average EV', 0))
-                avg_win = float(data.get('Average winrate', 0))
-
-            except:
-                pass
+            br = self.sheets.get_bankroll()
+            data = self.sheets.get_overview()
+            avg_roi = data.get('Average ROI', 0)
+            avg_roi = float(avg_roi) if isinstance(avg_roi, float) else 0
+            avg_ev = float(data.get('Average EV', 0))
+            avg_win = float(data.get('Average win rate', 0))
+            total_profit = float(data.get('Totaal winst', 0))
 
             self.send_message(f"""*Overview*\n\n \
 Bankroll: €{br:.2f}
 Average ROI: {avg_roi:.1%}
 Average EV: {avg_ev:.1%}
-Average winrate {avg_win:.1%}
+Average winrate: {avg_win:.2%}
+Profit: €{total_profit:.2f}
 
 """
-        )
-            
+            )
+        
         else:
             self.send_message("Google Sheets niet geconfigureerd")
+
         return {'action': 'bankroll'}
+    
 
     def _cmd_help(self) -> Dict:
         self.send_message(
@@ -1741,11 +1746,6 @@ class ValueBetScanner:
                 market_id = bet['market_id']
                
                 if (fid == i['fixtureId'] and bet['status'] == 'open'):
-                    x = i.get("markets", {}).get(market_id, {})
-                    print(fid)
-                    print(market_id)
-                    pprint(x)
-
                     result = i.get("markets",{}) \
                         .get(market_id, {}) \
                         .get("outcomes", {}).get(outcome_id, {}) \
@@ -1753,7 +1753,6 @@ class ValueBetScanner:
                         .get("result", 'UNKNOWN')
 
                     status = str(result.upper())
-                    pprint((status, fid, outcome_id))
                     if 'WIN' in status:
                         wins += 1
                     elif 'LOSE' in status:
@@ -1876,6 +1875,7 @@ class ValueBetScanner:
             try:
                 for update in self.telegram.get_updates():
                     result = self.telegram.process_update(update)
+         
 
                     if result:
                         action = result.get('action')
