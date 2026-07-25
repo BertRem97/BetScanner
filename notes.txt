@@ -25,7 +25,24 @@ kelly_fraction 0.25 = quarter Kelly,
       "be-bru"
     ]
   }
-  
+
+
+    SOFT_BOOKMAKERS = [#cashpoint.be --> betcenter.be
+        'cashpoint', 'unibet.be', 'starcasino.be', 'ladbrokes.be','betano', 'goldenpalacesports.be',
+        'bwin.be', 'napoleonsports.be', 'bet365', 'betway'
+
+        #ladbrokes.be
+        #betcenter.be, 
+        # bingoal.be, 
+        # betfirst.be, 
+        #goldenpalacesports.be, 
+    ]
+
+    # Sharp books used only for median reference, NOT as bet targets
+    SHARP_BOOKMAKERS = [
+        'pinnacle', 'sbobet', 'bet365', 'bwin.be', 'betonline.ag'
+    ]
+    
 }
 SOFT BOOKMAKERS:
 cashpoint.be --> betcenter.be
