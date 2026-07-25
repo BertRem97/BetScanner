@@ -51,11 +51,11 @@ logger = logging.getLogger(__name__)
 
 # Column headers for the bet log sheet
 SHEET_HEADERS = [
-    'Datum', 'Start wedstrijd', 'Event fixture', 'Match',
+    'Settlement', 'Datum', 'Start wedstrijd', 'Event fixture', 'Match',
     'Sport', 'Market', 'Outcome', 'Land / Tournooi', 'League',
     'Soft Book', 'Odds overzicht (soft)', 'Sharp Ref (mediaan)',
     'EV %', 'Win Prob', 'Stake Amount', 'Kelly %',
-    'Betslip', 'Mogelijke winst', 'Settlement'
+    'Betslip', 'Mogelijke winst'
 ]
 
 class ApiKeyManager:
@@ -146,6 +146,7 @@ class ValueBet:
         )
 
         return {
+            'Settlement': self.settlement_status,
             'Datum': self.timestamp,
             'Start wedstrijd': self.start_time,
             'Event fixture': self.fixture_id,
@@ -163,8 +164,7 @@ class ValueBet:
             'Stake Amount': round(self.stake_amount, 2),
             'Kelly %': round(self.kelly_fraction, 2),
             'Betslip': self.betslip_url or '',
-            'Mogelijke winst': round(self.soft_odds * self.stake_amount - self.stake_amount,2),
-            'Settlement': self.settlement_status
+            'Mogelijke winst': round(self.soft_odds * self.stake_amount - self.stake_amount,2)
         }
 
 
@@ -176,7 +176,7 @@ class OddsPapiClient:
 
     SOFT_BOOKMAKERS = [#cashpoint.be --> betcenter.be
         'cashpoint', 'unibet.be', 'starcasino.be', 'ladbrokes.be','betano', 'goldenpalacesports.be',
-        'bwin.be', 'napoleonsports.be', 'bet365', 'betway'
+        'bwin.be', 'napoleonsports.be', 'bet365'
 
         #ladbrokes.be
         #betcenter.be, 
@@ -438,8 +438,9 @@ class ValueBetCalculator:
     """Calculate value bets using median sharp reference and fractional Kelly"""
 
 
-    def __init__(self, min_ev_threshold: float = 2.0, kelly_fraction: float = 0.25):
+    def __init__(self, min_ev_threshold: float = 20.0, kelly_fraction: float = 0.25, min_win_prob: float = 8.0):
         self.min_ev_threshold = min_ev_threshold
+        self.min_win_prob = min_win_prob
         self.kelly_fraction = kelly_fraction
         self.odds_client = None
 
@@ -554,9 +555,9 @@ class ValueBetCalculator:
                 best_book = max(all_soft, key=lambda b: all_soft[b])
                 best_odds = all_soft[best_book]
                 ev = self.calculate_ev(best_odds, median_sharp)
+                win_prob = self.calculate_implied_probability(median_sharp)
 
-                if ev >= self.min_ev_threshold:
-                    win_prob = self.calculate_implied_probability(median_sharp)
+                if (ev >= self.min_ev_threshold and win_prob * 100 >= self.min_win_prob):
                     stake_amount, kelly_pct = self.calculate_stake(
                         win_prob, best_odds, bankroll, self.kelly_fraction
                     )
@@ -1169,7 +1170,8 @@ class ManualBetSession:
                 kelly_fraction=kelly_pct,
                 timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 betslip_url=None, #betslip
-                settlement_status='PENDING'
+                settlement_status='PENDING',
+                
             )
 
 
@@ -1638,7 +1640,8 @@ class ValueBetScanner:
 
         self.calculator = ValueBetCalculator(
             min_ev_threshold=config.get('min_ev_threshold', 2.0),
-            kelly_fraction=config.get('kelly_fraction', 0.25)
+            kelly_fraction=config.get('kelly_fraction', 0.25),
+            min_win_prob=config.get('min_win_probability')
         )
         self.calculator.set_odds_client(self.odds_client)
 
@@ -1865,7 +1868,7 @@ class ValueBetScanner:
             return
 
         self.telegram.send_message(
-            "*Value Bet Scanner Gestart*\n\nGebruik /run om de scanner te starten\n/help voor alle commando's\nGebruik /set om settlements bij te werken"
+            "*Value Bet Scanner Gestart*\n\nGebruik /run om de scanner te starten\n/help voor alle commando's\nGebruik /manueel om zelf een weddenschap te loggen."
         )
 
         scan_thread = None
@@ -1878,10 +1881,6 @@ class ValueBetScanner:
                         action = result.get('action')
 
                         if action == 'run' and not self.is_scanning:
-                            #logger.info("Updateing settlements")
-                            #self.telegram.send_message("Settlements bijwerken...")
-                            #msg = self.update_settlements()
-                            #self.telegram.send_message(f"*Settlements*\n\n{msg}")
                             self.is_scanning = True
 
                             scan_thread = threading.Thread(
@@ -1899,14 +1898,15 @@ class ValueBetScanner:
                                 self._log_bet(bet)
 
                         elif action == 'set':
-                            logger.info("Updateing settlements")
-                            self.telegram.send_message("Settlements bijwerken...")
-                            msg = self.update_settlements()
+                            logger.info("Updateing dashboard totals")
+                            self.telegram.send_message("Updating dashboard totals")
+                            #msg = self.update_settlements()
                             msg_dashboard = self.update_main_sheet_totals()
-                            self.telegram.send_message(f"*Settlements*\n\n{msg}")
+                            #self.telegram.send_message(f"*Settlements*\n\n{msg}")
                             self.telegram.send_message(msg_dashboard)
 
                 time.sleep(1)
+
             except KeyboardInterrupt:
                 self.is_scanning = False
                 break
@@ -1957,10 +1957,11 @@ def main():
     parser.add_argument('--interactive', action='store_true',
                         help='Telegram interactive mode')
     parser.add_argument('--sport', type=int, nargs='+', help="Sport ID's")
-    parser.add_argument('--ev', type=float, help='Minimum EV per bet')
+    parser.add_argument('--ev', type=float, help='Minimum EV % per bet')
     parser.add_argument('--days', type=float, help='Aantal dagen voorgaand de matches')
     parser.add_argument('--max_tournaments', type=float, help="Maximum aantal te verwerken tournaments")
-    parser.add_argument('--kelly', type=float, help='Fractie van kelly om stake te bepalen, default: 0.2')
+    parser.add_argument('--kelly', type=float, help='Fractie van kelly om stake te bepalen, default: 0.1')
+    parser.add_argument('--win_prob', type=float, help='Minimum % winkans op de outcome, default: 8')
 
     args = parser.parse_args()
     config = load_config(args.config)
