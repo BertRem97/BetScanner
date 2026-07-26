@@ -227,14 +227,24 @@ class OddsPapiClient:
                 self.key_manager.record_error(api_key)
                 
                 return self._make_request(endpoint, params)
-            
-            if response.status_code == 403:
 
+            if response.status_code == 404:
                 try:
                     error = response.json().get("error", "")
                 except ValueError:
                     error = response.text.strip()
 
+                if error.get("message") == "No scores found for the specified fixture.":
+                    logger.info(f"No scores found for: {response.url}")
+                    return None
+
+            if response.status_code == 403:
+                try:
+                    error = response.json().get("error", "")
+                except ValueError:
+                    error = response.text.strip()
+
+                    
                 if error == "Forbidden":
                     logger.warning("Forbidden 403 -> rotate IP address")
                     
@@ -244,6 +254,7 @@ class OddsPapiClient:
                 
             self.key_manager.record_request(api_key)
             return response
+        
         except Exception as e:
             self.key_manager.record_error(api_key)
             raise
@@ -349,38 +360,35 @@ class OddsPapiClient:
             return {}
         
   
-    def get_settlements(self, fixture_ids: List[str]) -> List[Dict]:
+    def get_scores(self, fixture_ids: List[str]) -> List[Dict]:
         if not fixture_ids:
             return []
-        
+
+   
+        scores = []
         try:
             for id in fixture_ids:
-                for x in self.settlements:
-                    if id == x["fixtureId"]:
-                        continue
-                
-                response = self._make_request("settlements", {'fixtureId': id})
+                response = self._make_request("scores", {'fixtureId': id})
                 if response is None:
-                    return None
-                response.raise_for_status()
-                self.settlements.append(response.json())
-
+                    continue
                 
+                scores.append(response.json())
+
+            return scores \
+                if scores is not None else None
+
+
         except requests.exceptions.ConnectionError as e:
             logger.warning(
                 f"Connection reset {e}"
             )
             time.sleep(3)
-            return self.get_settlements(fixture_ids)
+            return self.get_scores(fixture_ids)
 
         except requests.exceptions.ReadTimeout:
             logger.warning("Oddspapi timeout, retrying...")
             time.sleep(5)
-            return self.get_settlements(fixture_ids)
-
-        except Exception as e:
-            logger.error(f"Error fetching settlements: {e}")
-            return []
+            return self.get_scores(fixture_ids)
 
 
     def extract_odds_from_market(
@@ -667,7 +675,7 @@ class GoogleSheetsManager:
                 # Kolom B ophalen
                 result_B = self.service.spreadsheets().values().get(
                     spreadsheetId=self.spreadsheet_id,
-                    range=f"{sheet_name}!B2:B7",
+                    range=f"{sheet_name}!C2:C7",
                     valueRenderOption="UNFORMATTED_VALUE"
                 ).execute()
 
@@ -688,7 +696,7 @@ class GoogleSheetsManager:
                 # Kolom D ophalen
                 result_D = self.service.spreadsheets().values().get(
                     spreadsheetId=self.spreadsheet_id,
-                    range=f"{sheet_name}!D2:D7",
+                    range=f"{sheet_name}!E2:E7",
                     valueRenderOption="UNFORMATTED_VALUE"
                 ).execute()
 
@@ -951,7 +959,7 @@ class GoogleSheetsManager:
 
     def update_cell(self, row: int, col: int, value: str,
                     sheet_name: str = None) -> bool:
-        
+
         if not self.available:
             return False
         if sheet_name is None:
@@ -1040,8 +1048,8 @@ class GoogleSheetsManager:
     def update_settlement(self, fixture_id: str, settlement: str,
                         sheet_name: str = None) -> bool:
 
+    
         rows = self.get_all_rows(sheet_name)
-
         header_row = 10  # rij 11 in Sheets
 
         if len(rows) <= header_row:
@@ -1063,7 +1071,7 @@ class GoogleSheetsManager:
        
         for i, row in enumerate(rows[header_row + 1:], start=header_row + 1):
             # fixture ID staat in kolom C
-            if len(row) > 2 and row[2] == fixture_id:
+            if len(row) > 2 and row[3] == fixture_id:
                 # i is de echte index in rows
                 return self.update_cell(
                     i + 1,
@@ -1722,49 +1730,151 @@ class ValueBetScanner:
         if self.sheets:
             return self.sheets.get_bankroll()
         return float(self.config.get('bankroll', 500))
+
+
+    def settle_match_winner(self, outcome_id, result):
+        goals_ht = sum([result['home_ht'], result['away_ht']])
+        goals_ft = sum([result['home_score'], result['away_score']])
+        
+        if outcome_id in ['101', '111', '141', '191', '131', '181', '313', '311']:
+            return result['home_score'] > result['away_score']
+        
+        if outcome_id in ['102', '314']:
+            return result['home_score'] == result['away_score']
+
+        if outcome_id in ['103', '112', '142', '192', '132', '182', '315', '312']:
+            return result['away_score'] > result['home_score']
+
+        if outcome_id == '104':
+            return (result['home_score'] != 0 and result['away_score'] != 0)
+
+        if outcome_id == '105':
+            return (result['home_score'] > 0 and result['away_score'] == 0) \
+            or (result['away_score'] > 0 and result['home_score'] == 0)
+
+        if outcome_id == '10302':
+            return goals_ht <= goals_ft
+
+        if outcome_id == '10303':
+            return (goals_ht != 0 and goals_ft > goals_ht)
+
+        if outcome_id == '101902':
+            return (result['home_score'] > result['away_score'] \
+                    or result['home_score'] == result['away_score'])
+
+        if outcome_id == '101903':
+            return (result['home_score'] > result['away_score'] \
+                    or result['home_score'] < result['away_score'])
+
+        if outcome_id == '101904':
+            return (result['home_score'] == result['away_score'] or \
+                    result['away_score'] > result['home_score'])
+
+        if outcome_id == '10208':
+            return result['home_ht'] > result['away_ht']
+
+        if outcome_id == '10209':
+            return result['home_ht'] == result['away_ht']
+
+        if outcome_id == '10210':
+            return result['away_ht'] > result['home_ht']
+
+        if outcome_id == '10211':
+            return result['home_score'] > result['away_score']
+
+        if outcome_id == '10212':
+            return result['home_score'] == result['away_score']
+
+        if outcome_id == '10213':
+            return result['away_score'] > result['home_score']
+
+        if outcome_id == '108':
+            return goals_ft > 1.5
+
+        if outcome_id == '109':
+            return goals_ft < 1.5
+
+        if outcome_id == '1010':
+            return goals_ft > 2.5
+
+        if outcome_id == '1011':
+            return goals_ft < 2.5
+
+        if outcome_id == '1012':
+            return goals_ft > 3.5
+
+        if outcome_id == '1013':
+            return goals_ft < 3.5
+
+        #if outcome_id == '193':
+            #return 
+        return None
     
 
     def update_settlements(self) -> str:
         if not self.confirmed_bets:
             return "Geen bets om bij te werken"
 
-        fixture_ids = [b['fixture_id'] for b in self.confirmed_bets
-                       if not b['fixture_id'].startswith('manual_')]
-        
-        self.odds_client.get_settlements(fixture_ids)
+        fixture_ids = []
+        for b in self.confirmed_bets:
+            if not b['fixture_id'].startswith('manual_') \
+                    and b['status'] == 'open':
+
+                    fixture_ids.append(b['fixture_id'])
+
+        scores = self.odds_client.get_scores(fixture_ids)
         updated = wins = losses = 0
-        
+        if not scores:
+            logger.info("Cannot set settlements, no open bets found")
+            return "Geen open bets gevonden om bij te werken"
 
-        for i in self.settlements:
-            for bet in self.confirmed_bets:
-                fid = bet['fixture_id']
+        if self.sheets:
+            for i in scores:
+                for bet in self.confirmed_bets:
+                    fid = bet['fixture_id']
+                    if fid != i['fixtureId']:
+                        continue
 
-                if fid != i['fixtureId']:
-                    continue
+                    outcome_id = bet['outcome_id']
 
-                outcome_id = bet['outcome_id']
-                market_id = bet['market_id']
-               
-                if (fid == i['fixtureId'] and bet['status'] == 'open'):
-                    result = i.get("markets",{}) \
-                        .get(market_id, {}) \
-                        .get("outcomes", {}).get(outcome_id, {}) \
-                        .get("players", {}).get("0", {}) \
-                        .get("result", 'UNKNOWN')
+                    if (fid == i['fixtureId'] and bet['status'] == 'open'):
+                        results = i.get('scores').get('periods') \
+                        
+                        half_time_result = results.get("p1")
+                        full_time_result = results.get("fulltime")
+                        second_time_result = results.get("result")
 
-                    status = str(result.upper())
-                    if 'WIN' in status:
-                        wins += 1
-                    elif 'LOSE' in status:
-                        losses += 1
+                        score_home_half_time = float(half_time_result.get("participant1Score"))
+                        score_away_half_time = float(half_time_result.get("participant2Score"))
+                        score_home_second_time = float(second_time_result.get("participant1Score"))
+                        score_away_second_time = float(second_time_result.get("participant2Score"))
+                        score_home_full_time = float(full_time_result.get("participant1Score"))
+                        score_away_full_time = float(full_time_result.get("participant2Score"))
 
-                    if self.sheets:
-                        succes = self.sheets.update_settlement(fid, status)
-                        if succes:
-                            if status != "UNDECIDED":
+                        result = {
+                            "home_score": score_home_full_time,
+                            "away_score": score_away_full_time,
+                            "home_ht": score_home_half_time,
+                            "away_ht": score_away_half_time,
+                            "home_st": score_home_second_time,
+                            "away_st": score_away_second_time
+                        }
+
+                        win = self.settle_match_winner(outcome_id, result)
+
+                        status = None
+                        if win:
+                            wins += 1
+                            status = "WIN"
+                        elif not win:
+                            losses += 1
+                            status = "LOSE"
+
+                        if win is not None:
+                            succes = self.sheets.update_settlement(fid, status)
+                            if succes:
                                 if (
                                     bet['fixture_id'] == fid
-                                    and bet['market_id'] == market_id
                                     and bet['outcome_id'] == outcome_id
                                     ):
                                     bet['status'] = 'closed'
@@ -1774,7 +1884,7 @@ class ValueBetScanner:
 
                             updated += 1
 
-        return f"Bijgewerkt: {updated}\nGewonnen: {wins}\nVerloren: {losses}"
+            return f"Bijgewerkt: {updated}\nGewonnen: {wins}\nVerloren: {losses}"
     
 
     def update_main_sheet_totals(self):
@@ -1900,9 +2010,9 @@ class ValueBetScanner:
                         elif action == 'set':
                             logger.info("Updateing dashboard totals")
                             self.telegram.send_message("Updating dashboard totals")
-                            #msg = self.update_settlements()
+                            msg = self.update_settlements()
                             msg_dashboard = self.update_main_sheet_totals()
-                            #self.telegram.send_message(f"*Settlements*\n\n{msg}")
+                            self.telegram.send_message(f"*Settlements*\n\n{msg}")
                             self.telegram.send_message(msg_dashboard)
 
                 time.sleep(1)
