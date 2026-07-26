@@ -158,11 +158,11 @@ class ValueBet:
             'League': self.tournament_name,
             'Soft Book': f"{self.soft_bookmaker} @ {self.soft_odds}",
             'Odds overzicht (soft)': odds_str,
-            'Sharp Ref (mediaan)': round(self.sharp_odds, 2),
-            'EV %': round(self.ev_percentage / 100, 2),
-            'Win Prob': round(self.win_probability, 2),
+            'Sharp Ref (mediaan)': round(self.sharp_odds, 4),
+            'EV %': round(self.ev_percentage / 100, 4),
+            'Win Prob': round(self.win_probability, 4),
             'Stake Amount': round(self.stake_amount, 2),
-            'Kelly %': round(self.kelly_fraction, 2),
+            'Kelly %': round(self.kelly_fraction, 4),
             'Betslip': self.betslip_url or '',
             'Mogelijke winst': round(self.soft_odds * self.stake_amount - self.stake_amount,2)
         }
@@ -420,7 +420,6 @@ class OddsPapiClient:
                 odds[market_id] = market_odds
 
         return odds
-
 
 
     def get_outcome_betslip_url(self, bookmaker_data: Dict, outcome_id: str) -> Optional[str]:
@@ -978,36 +977,38 @@ class GoogleSheetsManager:
             logger.error(f"Error updating cell: {e}")
             return False
 
-    def get_profit_loss(self) -> Dict:
-        rows = self.get_all_rows()
-        if not rows:
-            return {'total': 0, 'wins': 0, 'losses': 0, 'pending': 0}
+    def get_profit_loss(self, sheet_name: str = None) -> Dict:
+        data = {}
+        if sheet_name is None:
+            sheet_name = self.get_or_create_monthly_sheet()
 
-        headers = [h.lower().strip() if h else '' for h in rows[10]]
-        col_idx = {h: i for i, h in enumerate(headers)}
+        result_C = self.service.spreadsheets().values() \
+            .get(
+            spreadsheetId=self.spreadsheet_id,
+            range=f"{sheet_name}!B2:C7",
+            valueRenderOption="UNFORMATTED_VALUE"
+            ).execute()
+    
+        values_C = result_C.get("values", [])
 
-        total = 0.0
-        wins = 0
-        losses = 0
-        pending = 0
+        result_D = self.service.spreadsheets().values() \
+                .get(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{sheet_name}!D2:E7",
+                valueRenderOption="UNFORMATTED_VALUE"
+                ).execute()
+        
+        values_D = result_D.get("values", [])
 
-        for row in rows[11:]:
-            try:
-                settlement = ''
-                for key in ['settlement', 'status', 'result']:
-                    if key in col_idx and col_idx[key] < len(row):
-                        settlement = row[col_idx[key]].upper()
-                        break
-                if 'WIN' in settlement:
-                    wins += 1
-                elif 'LOSE' in settlement:
-                    losses += 1
-                else:
-                    pending += 1
-            except Exception:
-                pending += 1
+        for row in values_C:
+            desc, value = row[0], row[1]
+            data[desc] = value       
 
-        return {'total': total, 'wins': wins, 'losses': losses, 'pending': pending}
+        for row in values_D:
+            desc, value = row[0], row[1]
+            data[desc] = value       
+
+        return data
     
     def get_overview(self) -> float:
         result = self.service.spreadsheets().values().get(
@@ -1435,7 +1436,7 @@ class TelegramBot:
         dispatch = {
             '/run':      lambda: {'action': 'run'},
             '/stop':     lambda: {'action': 'stop'},
-            '/profit':   self._cmd_profit,
+            '/current':   self._cmd_profit,
             '/keys':     self._cmd_keys,
             '/overview': self._cmd_overview,
             '/show_config': self._cmd_show_config,
@@ -1560,14 +1561,29 @@ Sports:\n {sports}
     def _cmd_profit(self) -> Dict:
         if self.sheets:
             p = self.sheets.get_profit_loss()
-            wr = (p['wins'] / max(1, p['wins'] + p['losses'])) * 100
-            self.send_message(
-                f"*Winst/Verlies*\n\n"
-                f"Gewonnen: {p['wins']}\n"
-                f"Verloren: {p['losses']}\n"
-                f"Open: {p['pending']}\n"
-                f"Win rate: {wr:.1f}%"
+            total_bets = float(p['Totaal Bets'])
+            open_bets = float(p['Open Bets'])
+            bets_won = float(p['Gewonnen Bets'])
+            bets_lost = float(p["Verloren Bets"])
+            inzet = float(p['Inzet'])
+            win_rate = float(p['Winrate'])
+            roi = float(p['ROI'])
+            ev = float(p['Gemiddelde EV'])
+            profit = float(p['Winst'])
+
+            self.send_message(f"""*Maand Overview*\n\n
+Totaal Bets: {total_bets}
+Open Bets: {open_bets}
+Gewonnen Bets: {bets_won}
+Verloren Bets: {bets_lost}
+Win Rate: {win_rate:.2%}
+Gemiddelde EV: {ev:.2%}\n
+Inzet: €{inzet:.2f}
+Winst: €{profit:.2f}
+            
+            """
             )
+
         else:
             self.send_message("Google Sheets niet geconfigureerd")
         return {'action': 'profit'}
@@ -1620,7 +1636,7 @@ Profit: €{total_profit:.2f}
             "/stop - Scanner stoppen\n"
             "/manueel - Bet handmatig invoeren\n"
             "/annuleer - Manuele invoer annuleren\n"
-            "/profit - Winst/verlies overzicht\n"
+            "/current - Winst/verlies overzicht\n"
             "/overiew - Toon totaaloverzicht\n"
             "/set - Settlements bijwerken\n"
             "/help - Dit overzicht"
@@ -1976,10 +1992,13 @@ class ValueBetScanner:
             logger.error("Telegram not configured")
             return
 
-        self.telegram.send_message(
-            "*Value Bet Scanner Gestart*\n\nGebruik /run om de scanner te starten\n/help voor alle commando's\nGebruik /manueel om zelf een weddenschap te loggen."
-        )
-
+        self.telegram.send_message("""*Value Bet Scanner Gestart*\n
+Gebruik /run om de scanner te starten
+Gebruik /manueel om zelf een weddenschap te loggen.
+/current om huidige prestaties te bekijken.
+/help voor alle commando's"""
+                                   
+)
         scan_thread = None
         while True:
             try:
