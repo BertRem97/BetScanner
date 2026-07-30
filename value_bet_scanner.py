@@ -176,7 +176,7 @@ class OddsPapiClient:
 
     SOFT_BOOKMAKERS = [#cashpoint.be --> betcenter.be
         'cashpoint', 'unibet.be', 'starcasino.be', 'ladbrokes.be','betano', 'goldenpalacesports.be',
-        'bwin.be', 'napoleonsports.be', 'bet365'
+        'bwin.be', 'napoleonsports.be', 'bet365', 'meridianbet', 'betfirst'
 
         #ladbrokes.be
         #betcenter.be, 
@@ -1453,7 +1453,7 @@ class TelegramBot:
             elif cmd == '/stop':
                 self.send_message("*Scanner GESTOPT*", chat_id=chat_id)
             if cmd == '/set':
-                 self.send_message("*Updating settlements...", chat_id=chat_id)
+                 self.send_message("*Updateing Settlements*", chat_id=chat_id)
                 
             return handler()
         return None
@@ -1546,12 +1546,15 @@ class TelegramBot:
             for id in self.config.get("sport_id", [])
             )
 
+        bookies = "\n".join(bookie for bookie in OddsPapiClient.SOFT_BOOKMAKERS)
+
         msg = f"""*Settings*\n\n
 Min ev threshold: {self.config.get('min_ev_threshold', 0)}
 Kelly f: {self.config.get('kelly_fraction', 0)}
 Max tournaments: {self.config.get('max_tournaments', 0)}
 Days ahead: {self.config.get('days_ahead', 0)}
-Sports:\n {sports}
+Sports:\n{sports}
+*Bookies*:{bookies}
         """
 
         self.send_message(msg)
@@ -1749,8 +1752,19 @@ class ValueBetScanner:
 
 
     def settle_match_winner(self, outcome_id, result):
-        goals_ht = sum([result['home_ht'], result['away_ht']])
-        goals_ft = sum([result['home_score'], result['away_score']])
+        try:
+            goals_ht = sum([result['home_ht'], result['away_ht']])
+            goals_ft = sum([result['home_score'], result['away_score']])
+            
+        except:
+            pass
+
+        print(outcome_id, result)
+        if outcome_id in ['181']:
+            return result['away_st'] > result['home_st']
+
+        if outcome_id in ['182']:
+            return result['away_st'] < result['home_st']
         
         if outcome_id in ['101', '111', '141', '191', '131', '181', '313', '311']:
             return result['home_score'] > result['away_score']
@@ -1854,30 +1868,40 @@ class ValueBetScanner:
                     outcome_id = bet['outcome_id']
 
                     if (fid == i['fixtureId'] and bet['status'] == 'open'):
-                        results = i.get('scores').get('periods') \
+                        print(i)
+                        print('YESSSSS')
+                        results = i.get('scores').get('periods') 
                         
                         half_time_result = results.get("p1")
                         full_time_result = results.get("fulltime")
                         second_time_result = results.get("result")
 
-                        score_home_half_time = float(half_time_result.get("participant1Score"))
-                        score_away_half_time = float(half_time_result.get("participant2Score"))
-                        score_home_second_time = float(second_time_result.get("participant1Score"))
-                        score_away_second_time = float(second_time_result.get("participant2Score"))
-                        score_home_full_time = float(full_time_result.get("participant1Score"))
-                        score_away_full_time = float(full_time_result.get("participant2Score"))
+                        score_home_second_time = float(second_time_result.get("participant1Score", None))
+                        score_away_second_time = float(second_time_result.get("participant2Score", None))
 
                         result = {
-                            "home_score": score_home_full_time,
-                            "away_score": score_away_full_time,
-                            "home_ht": score_home_half_time,
-                            "away_ht": score_away_half_time,
                             "home_st": score_home_second_time,
                             "away_st": score_away_second_time
-                        }
+                            }
 
+                        try:
+                            score_home_half_time = float(half_time_result.get("participant1Score", None))
+                            score_away_half_time = float(half_time_result.get("participant2Score", None))
+                            score_home_full_time = float(full_time_result.get("participant1Score", None))
+                            score_away_full_time = float(full_time_result.get("participant2Score", None))
+
+                            result = {
+                                "home_score": score_home_full_time,
+                                "away_score": score_away_full_time,
+                                "home_ht": score_home_half_time,
+                                "away_ht": score_away_half_time,
+                                }
+                
+                        except:
+                            pass
+              
                         win = self.settle_match_winner(outcome_id, result)
-
+                        
                         status = None
                         if win:
                             wins += 1
@@ -1886,6 +1910,7 @@ class ValueBetScanner:
                             losses += 1
                             status = "LOSE"
 
+                        print("\nDATAAA", fid, outcome_id, status)
                         if win is not None:
                             succes = self.sheets.update_settlement(fid, status)
                             if succes:
@@ -2009,13 +2034,17 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                     if result:
                         action = result.get('action')
 
-                        if action == 'run' and not self.is_scanning:
-                            self.is_scanning = True
+                        if action == 'run':
+                            if not self.is_scanning:
+                                self.is_scanning = True
 
-                            scan_thread = threading.Thread(
-                                target=self.scan_once, daemon=True
-                            )
-                            scan_thread.start()
+                                scan_thread = threading.Thread(
+                                    target=self.scan_once, daemon=True
+                                )
+                                scan_thread.start()
+                            else:
+                                self.is_scanning = False
+                                self.is_scanning = True
                            
                         elif action == 'stop':
                             self.is_scanning = False
@@ -2027,9 +2056,10 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                                 self._log_bet(bet)
 
                         elif action == 'set':
-                            logger.info("Updateing dashboard totals")
-                            self.telegram.send_message("Updating dashboard totals")
+                            logger.info("Updateing settlements")
                             msg = self.update_settlements()
+                            logger.info("Updating dashboard totals")
+                            self.telegram.send_message("Updating dashboard totals")
                             msg_dashboard = self.update_main_sheet_totals()
                             self.telegram.send_message(f"*Settlements*\n\n{msg}")
                             self.telegram.send_message(msg_dashboard)
@@ -2050,8 +2080,8 @@ Gebruik /manueel om zelf een weddenschap te loggen.
             row = [d.get(h, '') for h in SHEET_HEADERS]
             sheet_name = self.sheets.get_or_create_monthly_sheet()
             self.sheets.append_row(row, sheet_name=sheet_name)
-        self._save_confirmed(bet)
-        logger.info(f"Bet opgeslagen: {bet.fixture_id}")
+            self._save_confirmed(bet)
+            logger.info(f"Bet opgeslagen: {bet.fixture_id}")
 
     def run_single(self):
         bets = self.scan_once()

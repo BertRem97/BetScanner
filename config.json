@@ -221,7 +221,12 @@
   "1f05ef70-adaa-4835-bad3-12b114b1494e", "c59ed3c6-026c-48a6-b254-8b53c510cd59",
   "e5f9e71f-cac3-4c6f-a8ba-1d2c37fe2077", "07836dab-8df7-4046-b38f-fb588bf229ab",
   "62a8c1bb-e707-4b4f-9d91-d447f4d0a001", "5999d8cc-3808-48e5-b72f-ac5c27dd3d5e",
-  "fd0ae526-fe10-4f5d-a5d3-85d18db5654c"
+  "fd0ae526-fe10-4f5d-a5d3-85d18db5654c", "e59b12db-8873-4a36-bf2f-122ae26564ba",
+  "d5003946-7ceb-4d1e-8824-9f4b0f63b0d8", "f61edd2c-61cf-4287-b18f-ff2a93f2e846",
+  "af37d831-b020-4a42-8e3b-f0f162fe36ae", "b34b0460-8a88-4ef9-864b-0052e5b628c2",
+  "bfb9a9c8-5d16-4024-a81b-7b27ec18adc0", "d6b8d680-75ca-4706-a7db-cc6e7d67cc75",
+  "789df181-5026-4028-adb7-78ea6ace4dab"
+  
 
   ],
   "SOFT_BOOKMAKERS": ["cashpoint", "unibet", "pinnacle", "goldenpalacesports.be","bcgame", "bwin.be", "napoleonsports.be"],
@@ -231,13 +236,13 @@
   "telegram_chat_id": "6980285678",
   "google_credentials_path": "credentials.json",
   "google_spreadsheet_id": "1Q2ALPTkGx8SICor1c4cDjZWI5Ewg_OKugvr0yUNY_WQ",
-  "min_ev_threshold": 25,
+  "min_ev_threshold": 30,
   "min_win_probability": 8,
   "kelly_fraction": 0.10,
   "bankroll": 1000,
   "sport_id": [10, 13, 11, 18, 19, 14, 31],
-  "max_tournaments": 30,
-  "days_ahead": 7,
+  "max_tournaments": 50,
+  "days_ahead": 30,
   "request_delay": 1.0,
   "scan_interval": 300,
   "vpn": {
