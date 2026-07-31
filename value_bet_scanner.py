@@ -298,6 +298,12 @@ class OddsPapiClient:
             logger.error(f"Error fetching tournaments: {e}")
             return []
 
+    def get_markets(self):
+        response = self._make_request("markets")
+
+        return response.json()
+        
+
     def get_fixtures(self, tournament_id: Optional[int] = None, sport_id: int = 10,
                       days_ahead: int = 7, has_odds: bool = True) -> List[Dict]:
         today = datetime.now().date()
@@ -489,9 +495,11 @@ class ValueBetCalculator:
 
         sport_id = str(fixture.get('sportId'))
         sport_data = mapping.get(sport_id, {})
+
     
         if not sport_data:
             return value_bets
+
 
         sport_name = next(iter(sport_data))
         sport_markets = sport_data[sport_name]
@@ -1655,6 +1663,7 @@ class ValueBetScanner:
         self.config = config
         self.is_scanning = False
         self.settlements = []
+        self._market_mapping = []
 
         api_keys = config.get('oddspapi_keys', [])
         if not api_keys:
@@ -1870,7 +1879,6 @@ class ValueBetScanner:
 
                     if (fid == i['fixtureId'] and bet['status'] == 'open'):
                         print(i)
-                        print('YESSSSS')
                         results = i.get('scores').get('periods') 
                         
                         half_time_result = results.get("p1")
@@ -1911,7 +1919,8 @@ class ValueBetScanner:
                             losses += 1
                             status = "LOSE"
 
-                        print("\nDATAAA", fid, outcome_id, status)
+                        print("\nSTATS", fid, outcome_id, status)
+
                         if win is not None:
                             succes = self.sheets.update_settlement(fid, status)
                             if succes:

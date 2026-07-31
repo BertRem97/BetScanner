@@ -15,13 +15,13 @@ MARKETS = {
                 }
             },
             '10302': {
-                'Doelpunt in Beide Helften': {
-                    '10302': 'Nee',
-                    '10303': 'Ja'
+                'Beiden teams scoren in tweede helft': {
+                    '10302': 'Ja',
+                    '10303': 'Nee'
                 }
             },
             '101902': {
-                'Dubbele Kans': {
+                'Dubbele Kans Full Time': {
                     '101902': '1X',
                     '101903': '12',
                     '101904': 'X2'
@@ -43,19 +43,19 @@ MARKETS = {
                 }
             },
             '108': {
-                'Totaal aantal doelpunten': {
+                'Totaal aantal doelpunten Full Time': {
                     '108': 'Meer dan 1.5',
                     '109': 'Minder dan 1.5',
                 }
             },
             '1010': {
-                'Totaal aantal doelpunten': {
+                'Totaal aantal doelpunten Full Time': {
                     '1011': 'Minder dan 2.5',
                     '1010': 'Meer dan 2.5',
                 }
             },
             '1012': {
-                'Totaal aantal doelpunten': {
+                'Totaal aantal doelpunten Full Time': {
                     '1012': 'Meer dan 3.5',
                     '1013': 'Minder dan 3.5'
     
@@ -91,13 +91,13 @@ MARKETS = {
                     '191': 'Home',
                     '192': 'Away'
                 }
-            },
-            '193': {
-                "Meeste 180's": {
-                    '193': 'Home',
-                    '194': 'Draw',
-                    '195': 'Away'
-                }
+            #},
+            #'193': {
+                #"Meeste 180's": {
+                    #'193': 'Home',
+                    #'194': 'Draw',
+                    #'195': 'Away'
+                #}
             }
         }
     },
@@ -111,16 +111,16 @@ MARKETS = {
             }
         }
     },
-    #'18': { #Thuis / Uit staan gewisseld bij bookmaker bc.game
-        #'Esports - League of Ledgends': {
-            #'181': {
-            #'Winnaar': {
-                    #'181': 'Home',
-                    #'182': 'Away'
-                #}
-            #}   
-        #}
-    #}
+    '18': { #Thuis / Uit staan gewisseld bij bookmaker bc.game
+        'Esports - League of Ledgends': {
+            '181': {
+            'Winnaar': {
+                    '182': 'Away',
+                    '181': 'Home'
+                }
+            }   
+        }
+    },
     '31': {
         'Aussie Rules': {
             '313': {
@@ -134,6 +134,52 @@ MARKETS = {
                 'Winnaar': {
                     '311': 'Home',
                     '312': 'Away'
+                }
+            },
+            '321': {
+                'Winnaar': {
+                    '321': 'Home',
+                    '322': 'Away'
+                }
+            }
+        }
+    },
+    '12': {
+        'Tennis': {
+            '121033': {
+                'Beiden teams winnen een set': {
+                    '121033': 'Ja',
+                    '121034': 'Nee'
+                }
+            },
+            '121': {
+                'Winnaar': {
+                    '121': 'Home',
+                    '122': 'Away'
+                }
+            },
+            '123': {
+                'Winnaar eerste set': {
+                    '123': 'Home',
+                    '124': 'Away'
+                }
+            },
+            '125': {
+                'Winnaar tweede set': {
+                    '125': 'Home',
+                    '126': 'Away',
+                }
+            },
+            '12245': {
+                'Home team wint minstens één set': {
+                    '12245': 'Ja',
+                    '12246': 'Nee'
+                }
+            },
+            '12247': {
+                'Uit team wint minstens één set': {
+                    '12247': 'Ja',
+                    '12248': 'Nee'
                 }
             }
         }
