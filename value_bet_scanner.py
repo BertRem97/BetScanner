@@ -1552,9 +1552,10 @@ class TelegramBot:
 Min ev threshold: {self.config.get('min_ev_threshold', 0)}
 Kelly f: {self.config.get('kelly_fraction', 0)}
 Max tournaments: {self.config.get('max_tournaments', 0)}
-Days ahead: {self.config.get('days_ahead', 0)}
-Sports:\n{sports}
-*Bookies*:{bookies}
+Days ahead: {self.config.get('days_ahead', 0)}\n
+*Sports*:\n{sports}\n
+*Bookies*:
+{bookies}
         """
 
         self.send_message(msg)
@@ -1755,7 +1756,7 @@ class ValueBetScanner:
         try:
             goals_ht = sum([result['home_ht'], result['away_ht']])
             goals_ft = sum([result['home_score'], result['away_score']])
-            
+
         except:
             pass
 
@@ -2035,17 +2036,16 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                         action = result.get('action')
 
                         if action == 'run':
+                            print(self.is_scanning)
                             if not self.is_scanning:
+                                self.is_scanning = False
                                 self.is_scanning = True
 
                                 scan_thread = threading.Thread(
                                     target=self.scan_once, daemon=True
                                 )
                                 scan_thread.start()
-                            else:
-                                self.is_scanning = False
-                                self.is_scanning = True
-                           
+
                         elif action == 'stop':
                             self.is_scanning = False
 
