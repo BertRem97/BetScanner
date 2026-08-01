@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 
 # Column headers for the bet log sheet
 SHEET_HEADERS = [
-    'Settlement', 'Datum', 'Start wedstrijd', 'Event fixture', 'Match',
+    'Settlement', 'Datum', 'Start wedstrijd', 'Event fixture', 'Outcome id', 'Match',
     'Sport', 'Market', 'Outcome', 'Land / Tournooi', 'League',
     'Soft Book', 'Odds overzicht (soft)', 'Sharp Ref (mediaan)',
     'EV %', 'Win Prob', 'Stake Amount', 'Kelly %',
@@ -150,6 +150,7 @@ class ValueBet:
             'Datum': self.timestamp,
             'Start wedstrijd': self.start_time,
             'Event fixture': self.fixture_id,
+            'Outcome id': self.outcome_id,
             'Match': f"{self.participant1} - {self.participant2}",
             'Sport': self.sport,
             'Market': self.market,
@@ -174,15 +175,17 @@ class OddsPapiClient:
     BASE_URL = "https://api.oddspapi.io/v4"
 
 
-    SOFT_BOOKMAKERS = [#cashpoint.be --> betcenter.be
-        'cashpoint', 'unibet.be', 'starcasino.be', 'ladbrokes.be','betano', 'goldenpalacesports.be',
-        'bwin.be', 'napoleonsports.be', 'bet365', 'betfirst.be'
+    SOFT_BOOKMAKERS = [
+        'betcenter.be', 'unibet.be', 'starcasino.be', 'betano', 'goldenpalacesports.be',
+        'bwin.be', 'napoleonsports.be', 'bet365'
 
         #ladbrokes.be
         #betcenter.be, 
         # bingoal.be, 
-        # betfirst.be, 
+        # betfirst.be, -> betsson?
         #goldenpalacesports.be, 
+        #starcasino.be -> starsport.be
+        #cashpoint.be --> betcenter.be
     ]
 
     # Sharp books used only for median reference, NOT as bet targets
@@ -950,7 +953,7 @@ class GoogleSheetsManager:
             return []
         if sheet_range is None:
             sheet_name = self.get_or_create_monthly_sheet()
-            sheet_range = f"'{sheet_name}'!A{self.first_data_row}:Z"
+            sheet_range = f"'{sheet_name}'!A:Z"
         try:
             result = self.service.spreadsheets().values().get(
                 spreadsheetId=self.spreadsheet_id,
@@ -967,7 +970,9 @@ class GoogleSheetsManager:
 
         except Exception as e:
             logger.error(f"Error reading sheet: {e}")
-            return []
+            logger.info("Google sheets read timeout, trying again")
+            time.sleep(5)
+            self.get_all_rows(sheet_range)
 
     def update_cell(self, row: int, col: int, value: str,
                     sheet_name: str = None) -> bool:
@@ -984,6 +989,7 @@ class GoogleSheetsManager:
                 valueInputOption='USER_ENTERED',
                 body={'values': [[value]]}
             ).execute()
+
             return True
         
         except Exception as e:
@@ -1057,13 +1063,11 @@ class GoogleSheetsManager:
 
         return 500
 
-    def update_settlement(self, fixture_id: str, settlement: str,
+    def update_settlement(self, fixture_id: str, settlement: str, outcome_id: str,
                         sheet_name: str = None) -> bool:
 
-    
         rows = self.get_all_rows(sheet_name)
         header_row = 10  # rij 11 in Sheets
-
         if len(rows) <= header_row:
             return False
 
@@ -1081,12 +1085,13 @@ class GoogleSheetsManager:
         if settlement_col is None:
             logger.info("No settlement column found in sheet")
             return False
-       
+        
+        
         for i, row in enumerate(rows[header_row + 1:], start=header_row + 1):
-            print(len(row), row[3], row[3] == fixture_id)
             # fixture ID staat in kolom C
-            if len(row) > 2 and row[3] == fixture_id:
-                print("UPDATING!!!!!!!!")
+            if len(row) > 2 and row[3] == fixture_id \
+                and row[4] == outcome_id:
+
                 # i is de echte index in rows
                 return self.update_cell(
                     i + 1,
@@ -1885,7 +1890,6 @@ class ValueBetScanner:
                     outcome_id = bet['outcome_id']
 
                     if (fid == i['fixtureId'] and bet['status'] == 'open'):
-                        print(i)
                         results = i.get('scores').get('periods') 
                         
                         half_time_result = results.get("p1")
@@ -1915,6 +1919,8 @@ class ValueBetScanner:
                 
                         except:
                             pass
+
+                        print("\nSTATS", fid, outcome_id)
               
                         win = self.settle_match_winner(outcome_id, result)
                         
@@ -1927,10 +1933,10 @@ class ValueBetScanner:
                             status = "LOSE"
 
                         print("\nSTATS", fid, outcome_id, status)
+                        
 
                         if win is not None:
-                            print(f"YESS!!")
-                            succes = self.sheets.update_settlement(fid, status)
+                            succes = self.sheets.update_settlement(fid, status, outcome_id)
                             if succes:
                                 print("Settlement Updated!")
                                 if (
@@ -2049,12 +2055,10 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                 for update in self.telegram.get_updates():
                     result = self.telegram.process_update(update)
          
-
                     if result:
                         action = result.get('action')
 
                         if action == 'run':
-                            print(self.is_scanning)
                             if not self.is_scanning:
                                 self.is_scanning = False
                                 self.is_scanning = True
