@@ -10,7 +10,7 @@ kelly_fraction 0.25 = quarter Kelly,
   "min_ev_threshold": 10,
   "kelly_fraction": 0.20,
   "bankroll": 1000,
-  "sport_id": [10],
+  "sport_id": [10, 12, 13, 11, 18, 14, 31],
   "max_tournaments": 50,
   "days_ahead": 30,
   "request_delay": 1.0,
@@ -42,7 +42,7 @@ kelly_fraction 0.25 = quarter Kelly,
     SHARP_BOOKMAKERS = [
         'pinnacle', 'sbobet', 'bet365', 'bwin.be', 'betonline.ag'
     ]
-    
+
 }
 SOFT BOOKMAKERS:
 cashpoint.be --> betcenter.be

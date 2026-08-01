@@ -176,7 +176,7 @@ class OddsPapiClient:
 
     SOFT_BOOKMAKERS = [#cashpoint.be --> betcenter.be
         'cashpoint', 'unibet.be', 'starcasino.be', 'ladbrokes.be','betano', 'goldenpalacesports.be',
-        'bwin.be', 'napoleonsports.be', 'bet365', 'meridianbet', 'betfirst'
+        'bwin.be', 'napoleonsports.be', 'bet365', 'betfirst.be'
 
         #ladbrokes.be
         #betcenter.be, 
@@ -573,6 +573,9 @@ class ValueBetCalculator:
                 win_prob = self.calculate_implied_probability(median_sharp)
 
                 if (ev >= self.min_ev_threshold and win_prob * 100 >= self.min_win_prob):
+                    start_data = fixture.get('startTime', '').split('T')
+                    start_date, start_time = start_data[0], start_data[1][:5]
+
                     stake_amount, kelly_pct = self.calculate_stake(
                         win_prob, best_odds, bankroll, self.kelly_fraction
                     )
@@ -597,7 +600,7 @@ class ValueBetCalculator:
                         fixture_id=fixture.get('fixtureId', ''),
                         participant1=fixture.get('participant1Name', 'Unknown'),
                         participant2=fixture.get('participant2Name', 'Unknown'),
-                        start_time=fixture.get('startTime', ''),
+                        start_time=f"{start_date} {start_time}",
                         tournament_name=fixture.get('tournamentName', 'Unknown'),
                         category_name=fixture.get('categoryName', 'Unknown'),
                         market=market_name,
@@ -765,15 +768,12 @@ class GoogleSheetsManager:
 
             logger.info("Main sheet totals updated")
             return "Dashboard totals succesvol bijgewerkt"
+
         
-        except requests.exceptions.ReadTimeout:
-            logger.warning("Oddspapi timeout, retrying...")
+        except Exception as e:
+            logger.error(f"Error updating totals: {e}, trying again")
             time.sleep(5)
             return self.update_main_sheet_totals()
-
-        except Exception as e:
-            logger.error(f"Error updating totals: {e}")
-            return "Dashboard totals niet kunnen bijwerken"
 
 
     def _fetch_sheet_meta(self) -> List[Dict]:
@@ -845,8 +845,13 @@ class GoogleSheetsManager:
 
         now = datetime.now()
         year = year or now.year
-        month = month or now.month
-        sheet_name = f"{year}-{month:02d}"
+        current_month = now.month
+
+        if month is None:
+            sheet_name = f"{year}-{current_month:02d}"
+
+        else:
+            sheet_name = f"{year}-{month}"
 
         with self._sheet_lock:
             # Fast path: already in local cache
@@ -926,16 +931,11 @@ class GoogleSheetsManager:
         if sheet_name is None:
             sheet_name = self.get_or_create_monthly_sheet()
         try:
-            result = self.service.spreadsheets().values().get(
+            self.service.spreadsheets().values().append(
             spreadsheetId=self.spreadsheet_id,
-            range=f"'{sheet_name}'!A:A"
-            ).execute()
-
-            next_row = len(result.get("values", [])) + 1
-            self.service.spreadsheets().values().update(
-            spreadsheetId=self.spreadsheet_id,
-            range=f"'{sheet_name}'!A{next_row}",
+            range=f"'{sheet_name}'!A:Z",
             valueInputOption="USER_ENTERED",
+            insertDataOption="INSERT_ROWS",
             body={"values": [row]}
             ).execute()
 
@@ -950,7 +950,7 @@ class GoogleSheetsManager:
             return []
         if sheet_range is None:
             sheet_name = self.get_or_create_monthly_sheet()
-            sheet_range = f"'{sheet_name}'!A:Z"
+            sheet_range = f"'{sheet_name}'!A{self.first_data_row}:Z"
         try:
             result = self.service.spreadsheets().values().get(
                 spreadsheetId=self.spreadsheet_id,
@@ -959,7 +959,12 @@ class GoogleSheetsManager:
 
             values = result.get("values", [])
             return values
-            
+
+        except requests.exceptions.ReadTimeout:
+            logger.info("Google sheets read timeout, trying again")
+            time.sleep(5)
+            self.get_all_rows(sheet_range)
+
         except Exception as e:
             logger.error(f"Error reading sheet: {e}")
             return []
@@ -998,7 +1003,6 @@ class GoogleSheetsManager:
             ).execute()
     
         values_C = result_C.get("values", [])
-
         result_D = self.service.spreadsheets().values() \
                 .get(
                 spreadsheetId=self.spreadsheet_id,
@@ -1035,7 +1039,6 @@ class GoogleSheetsManager:
 
     def get_bankroll(self) -> float:
         if not self.available:
-            print("NOT AVAILABLE")
             return 500
         try:
             result = self.service.spreadsheets().values().get(
@@ -1076,11 +1079,14 @@ class GoogleSheetsManager:
                 break
 
         if settlement_col is None:
+            logger.info("No settlement column found in sheet")
             return False
        
         for i, row in enumerate(rows[header_row + 1:], start=header_row + 1):
+            print(len(row), row[3], row[3] == fixture_id)
             # fixture ID staat in kolom C
             if len(row) > 2 and row[3] == fixture_id:
+                print("UPDATING!!!!!!!!")
                 # i is de echte index in rows
                 return self.update_cell(
                     i + 1,
@@ -1300,10 +1306,10 @@ class TelegramBot:
 
         message = (
             f"*Value Bet Gevonden!*\n\n"
-            f"*{bet.participant1}* vs *{bet.participant2}*\n"
+            f"*{bet.participant1}* vs *{bet.participant2}*\n\n"
             f"Start: {bet.start_time}\n"
-            f"Competitie: {bet.tournament_name} ({bet.category_name})\n"
-            f"Sport: {bet.sport}\n\n"
+            f"Competitie: {bet.tournament_name} ({bet.category_name})\n\n"
+            f"Sport: {bet.sport}\n"
             f"Markt: {bet.market}\n"
             f"Uitkomst: *{bet.outcome}*\n\n"
             f"*Odds overzicht:*\n"
@@ -1557,10 +1563,11 @@ class TelegramBot:
         bookies = "\n".join(bookie for bookie in OddsPapiClient.SOFT_BOOKMAKERS)
 
         msg = f"""*Settings*\n\n
-Min ev threshold: {self.config.get('min_ev_threshold', 0)}
-Kelly f: {self.config.get('kelly_fraction', 0)}
-Max tournaments: {self.config.get('max_tournaments', 0)}
-Days ahead: {self.config.get('days_ahead', 0)}\n
+Min ev threshold: {self.config.get('min_ev_threshold', "Onbekend")}
+Min win chance: {self.config.get('min_win_probability', "Onbekend")}
+Kelly f: {self.config.get('kelly_fraction', "Onbekend")}
+Max tournaments: {self.config.get('max_tournaments', "Onbekend")}
+Days ahead: {self.config.get('days_ahead', "Onbekend")}\n
 *Sports*:\n{sports}\n
 *Bookies*:
 {bookies}
@@ -1588,8 +1595,8 @@ Totaal Bets: {total_bets}
 Open Bets: {open_bets}
 Gewonnen Bets: {bets_won}
 Verloren Bets: {bets_lost}
-Win Rate: {win_rate:.2%}
-Gemiddelde EV: {ev:.2%}\n
+Win Rate: {win_rate:.1%}
+Gemiddelde EV: {ev:.1%}\n
 Inzet: €{inzet:.2f}
 Winst: €{profit:.2f}
             
@@ -1865,7 +1872,7 @@ class ValueBetScanner:
         scores = self.odds_client.get_scores(fixture_ids)
         updated = wins = losses = 0
         if not scores:
-            logger.info("Cannot set settlements, no open bets found")
+            logger.info("Cannot set settlements, no finished bets found")
             return "Geen open bets gevonden om bij te werken"
 
         if self.sheets:
@@ -1922,8 +1929,10 @@ class ValueBetScanner:
                         print("\nSTATS", fid, outcome_id, status)
 
                         if win is not None:
+                            print(f"YESS!!")
                             succes = self.sheets.update_settlement(fid, status)
                             if succes:
+                                print("Settlement Updated!")
                                 if (
                                     bet['fixture_id'] == fid
                                     and bet['outcome_id'] == outcome_id
@@ -1933,7 +1942,7 @@ class ValueBetScanner:
                                 with open('confirmed_bets.json', 'w') as f:
                                     json.dump(self.confirmed_bets, f, indent=2)
 
-                            updated += 1
+                                updated += 1
 
             return f"Bijgewerkt: {updated}\nGewonnen: {wins}\nVerloren: {losses}"
     
@@ -2086,11 +2095,17 @@ Gebruik /manueel om zelf een weddenschap te loggen.
         """Write a confirmed bet to the monthly Google Sheet."""
         if self.sheets:
             d = bet.to_dict()
+            start_date = d.get('Start wedstrijd').split(" ")[0]
+            data = start_date.split('-')
+
             row = [d.get(h, '') for h in SHEET_HEADERS]
-            sheet_name = self.sheets.get_or_create_monthly_sheet()
-            self.sheets.append_row(row, sheet_name=sheet_name)
-            self._save_confirmed(bet)
-            logger.info(f"Bet opgeslagen: {bet.fixture_id}")
+            sheet_name = self.sheets.get_or_create_monthly_sheet(year=data[0], month=data[1])
+            if self.sheets.append_row(row, sheet_name=sheet_name):
+                self._save_confirmed(bet)
+                logger.info(f"Bet opgeslagen: {bet.fixture_id}")
+            else:
+                logger.info(f"Bet niet kunnen opslaan: {bet.fixture_id}")
+
 
     def run_single(self):
         bets = self.scan_once()
