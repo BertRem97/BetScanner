@@ -177,7 +177,7 @@ class OddsPapiClient:
 
     SOFT_BOOKMAKERS = [
         'betcenter.be', 'unibet.be', 'starcasino.be', 'betano', 'goldenpalacesports.be',
-        'bwin.be', 'napoleonsports.be', 'bet365'
+        'bwin.be', 'napoleonsports.be', 'bet365', 'bcgame'
 
         #ladbrokes.be
         #betcenter.be, 
@@ -1783,12 +1783,48 @@ class ValueBetScanner:
 
         print(outcome_id, result)
         if outcome_id in ['181']:
-            return result['away_st'] > result['home_st']
+            return result['away_end'] < result['home_end']
 
-        if outcome_id in ['182']:
-            return result['away_st'] < result['home_st']
+        if outcome_id in ['12246']:
+            return result['home_end'] == 0
+
+        if outcome_id in ['12245']:
+            return result['home_end'] > 0
+
+        if outcome_id in ['12247']:
+            return result['away_end'] > 0
+
+        if outcome_id in ['12248']:
+            return result['away_end'] == 0
+
+        if outcome_id in ['121033']:
+            return result['home_end'] > 0 and result['away_end'] > 0
+
+        if outcome_id in ['121']:
+            return result['home_end'] > result['away_end']
+
+        if outcome_id in ['122']:
+            return result['home_end'] < result['away_end']
+
+        if outcome_id in ['123']:
+            return result['home_ht'] > result['away_ht']
+
+        if outcome_id in ['124']:
+            return result['home_ht'] < result['away_ht']
+
+        if outcome_id in ['125']:
+            return result['home_st'] > result['away_st']
+
+        if outcome_id in ['126']:
+            return result['away_st'] > result['home_st']
         
-        if outcome_id in ['101', '111', '141', '191', '131', '181', '313', '311']:
+        if outcome_id in ['182']:
+            return result['away_end'] > result['home_end']
+
+        if outcome_id in ['181']:
+            return result['home_end'] > result['away_end']
+        
+        if outcome_id in ['101', '111', '141', '191', '131', '313', '311']:
             return result['home_score'] > result['away_score']
         
         if outcome_id in ['102', '314']:
@@ -1798,7 +1834,7 @@ class ValueBetScanner:
             return result['away_score'] > result['home_score']
 
         if outcome_id == '104':
-            return (result['home_score'] != 0 and result['away_score'] != 0)
+            return result['home_score'] != 0 and result['away_score'] != 0
 
         if outcome_id == '105':
             return (result['home_score'] > 0 and result['away_score'] == 0) \
@@ -1811,16 +1847,16 @@ class ValueBetScanner:
             return (goals_ht != 0 and goals_ft > goals_ht)
 
         if outcome_id == '101902':
-            return (result['home_score'] > result['away_score'] \
-                    or result['home_score'] == result['away_score'])
+            return result['home_score'] > result['away_score'] \
+                    or result['home_score'] == result['away_score']
 
         if outcome_id == '101903':
-            return (result['home_score'] > result['away_score'] \
-                    or result['home_score'] < result['away_score'])
+            return result['home_score'] > result['away_score'] \
+                    or result['home_score'] < result['away_score']
 
         if outcome_id == '101904':
-            return (result['home_score'] == result['away_score'] or \
-                    result['away_score'] > result['home_score'])
+            return result['home_score'] == result['away_score'] or \
+                    result['away_score'] > result['home_score']
 
         if outcome_id == '10208':
             return result['home_ht'] > result['away_ht']
@@ -1832,13 +1868,13 @@ class ValueBetScanner:
             return result['away_ht'] > result['home_ht']
 
         if outcome_id == '10211':
-            return result['home_score'] > result['away_score']
+            return result['home_st'] > result['away_st']
 
         if outcome_id == '10212':
-            return result['home_score'] == result['away_score']
+            return result['home_st'] == result['away_st']
 
         if outcome_id == '10213':
-            return result['away_score'] > result['home_score']
+            return result['away_st'] > result['home_st']
 
         if outcome_id == '108':
             return goals_ft > 1.5
@@ -1882,6 +1918,7 @@ class ValueBetScanner:
 
         if self.sheets:
             for i in scores:
+                print(i)
                 for bet in self.confirmed_bets:
                     fid = bet['fixture_id']
                     if fid != i['fixtureId']:
@@ -1891,35 +1928,41 @@ class ValueBetScanner:
 
                     if (fid == i['fixtureId'] and bet['status'] == 'open'):
                         results = i.get('scores').get('periods') 
-                        
-                        half_time_result = results.get("p1")
-                        full_time_result = results.get("fulltime")
-                        second_time_result = results.get("result")
+                            
+                        half_time_result = results.get("p1", None)
+                        full_time_result = results.get("fulltime", None)
+                        end_score = results.get("result", None)
+                        second_time_result = results.get("p2", None)
 
-                        score_home_second_time = float(second_time_result.get("participant1Score", None))
-                        score_away_second_time = float(second_time_result.get("participant2Score", None))
+                        end_score_home = float(end_score.get("participant1Score"))
+                        end_score_away = float(end_score.get("participant2Score"))
 
                         result = {
-                            "home_st": score_home_second_time,
-                            "away_st": score_away_second_time
+                            "home_score": None,
+                            "away_score": None,
+                            "home_ht": None,
+                            "away_ht": None,
+                            "home_st": None,
+                            "away_st": None,
+                            "home_end": end_score_home,
+                            "away_end": end_score_away
                             }
 
-                        try:
-                            score_home_half_time = float(half_time_result.get("participant1Score", None))
-                            score_away_half_time = float(half_time_result.get("participant2Score", None))
-                            score_home_full_time = float(full_time_result.get("participant1Score", None))
-                            score_away_full_time = float(full_time_result.get("participant2Score", None))
 
-                            result = {
-                                "home_score": score_home_full_time,
-                                "away_score": score_away_full_time,
-                                "home_ht": score_home_half_time,
-                                "away_ht": score_away_half_time,
-                                }
-                
-                        except:
-                            pass
+                        if half_time_result:
+                            result['home_ht'] = float(half_time_result.get("participant1Score"))
+                            result['away_ht'] = float(half_time_result.get("participant2Score"))
+                            
+                        if full_time_result:
+                            result['home_score'] = float(full_time_result.get("participant1Score"))
+                            result['away_score'] = float(full_time_result.get("participant2Score"))
+                           
+                        if second_time_result:
+                            result['home_st'] = float(second_time_result.get("participant1Score"))
+                            result['away_st'] = float(second_time_result.get("participant2Score"))
+                        
 
+                        print(result)
                         print("\nSTATS", fid, outcome_id)
               
                         win = self.settle_match_winner(outcome_id, result)
