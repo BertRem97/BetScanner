@@ -305,16 +305,48 @@ class OddsPapiClient:
         response = self._make_request("markets")
 
         return response.json()
+
+
+    def get_fixture(self, fixture_id):
+
+        params = {
+                'fixtureId': fixture_id
+                }
         
+        try:
+            response = self._make_request("fixture", params)
+            if response is None:
+                return None
+            response.raise_for_status()
+            return response.json()
+            
+        except requests.exceptions.ConnectionError as e:
+            logger.warning(
+                f"Connection reset {e}"
+            )
+            time.sleep(3)
+            return self.get_fixture(fixture_id)
+        
+        except requests.exceptions.ReadTimeout:
+            logger.warning("Oddspapi timeout, retrying...")
+            time.sleep(5)
+            return self.get_fixture(fixture_id)
+            
+        except Exception as e:
+            return []
+
+
 
     def get_fixtures(self, tournament_id: Optional[int] = None, sport_id: int = 10,
                       days_ahead: int = 7, has_odds: bool = True) -> List[Dict]:
+        
         today = datetime.now().date()
+        tomorrow = today + timedelta(days=1)
 
         params = {
             'sportId': sport_id,
-            'from': today.isoformat(),
-            'to': (today + timedelta(days=days_ahead)).isoformat(),
+            'from': tomorrow.isoformat(),
+            'to': (tomorrow + timedelta(days=days_ahead)).isoformat(),
         }
         if tournament_id:
             params['tournamentId'] = tournament_id
@@ -1068,37 +1100,39 @@ class GoogleSheetsManager:
 
         rows = self.get_all_rows(sheet_name)
         header_row = 10  # rij 11 in Sheets
-        if len(rows) <= header_row:
-            return False
 
-        headers = [
-            h.lower() if h else ''
-            for h in rows[header_row]
-        ]
-        settlement_col = None
+        if rows:
+            if len(rows) <= header_row:
+                return False
 
-        for j, h in enumerate(headers):
-            if 'settlement' in h:
-                settlement_col = j
-                break
+            headers = [
+                h.lower() if h else ''
+                for h in rows[header_row]
+            ]
+            settlement_col = None
 
-        if settlement_col is None:
-            logger.info("No settlement column found in sheet")
-            return False
-        
-        
-        for i, row in enumerate(rows[header_row + 1:], start=header_row + 1):
-            # fixture ID staat in kolom C
-            if len(row) > 2 and row[3] == fixture_id \
-                and row[4] == outcome_id:
+            for j, h in enumerate(headers):
+                if 'settlement' in h:
+                    settlement_col = j
+                    break
 
-                # i is de echte index in rows
-                return self.update_cell(
-                    i + 1,
-                    settlement_col,
-                    settlement,
-                    sheet_name
-                )
+            if settlement_col is None:
+                logger.info("No settlement column found in sheet")
+                return False
+            
+            
+            for i, row in enumerate(rows[header_row + 1:], start=header_row + 1):
+                # fixture ID staat in kolom C
+                if len(row) > 2 and row[3] == fixture_id \
+                    and row[4] == outcome_id:
+
+                    # i is de echte index in rows
+                    return self.update_cell(
+                        i + 1,
+                        settlement_col,
+                        settlement,
+                        sheet_name
+                    )
 
         return False
 
@@ -1824,13 +1858,22 @@ class ValueBetScanner:
         if outcome_id in ['181']:
             return result['home_end'] > result['away_end']
         
-        if outcome_id in ['101', '111', '141', '191', '131', '313', '311']:
+        if outcome_id in ['111', '141', '191', '131', '313', '311']:
             return result['home_score'] > result['away_score']
+
+        if outcome_id == '101':
+            return result['home_end'] > result['away_end']
+
+        if outcome_id == '102':
+            return result['home_end'] == result['away_end']
+
+        if outcome_id == '103':
+            return result['home_end'] < result['away_end']
         
-        if outcome_id in ['102', '314']:
+        if outcome_id in ['314']:
             return result['home_score'] == result['away_score']
 
-        if outcome_id in ['103', '112', '142', '192', '132', '182', '315', '312']:
+        if outcome_id in ['112', '142', '192', '132', '182', '315', '312']:
             return result['away_score'] > result['home_score']
 
         if outcome_id == '104':
@@ -1859,6 +1902,9 @@ class ValueBetScanner:
                     result['away_score'] > result['home_score']
 
         if outcome_id == '10208':
+            if (result['home_ht'] and result['away_ht']) is None:
+                return None
+            
             return result['home_ht'] > result['away_ht']
 
         if outcome_id == '10209':
@@ -1868,13 +1914,13 @@ class ValueBetScanner:
             return result['away_ht'] > result['home_ht']
 
         if outcome_id == '10211':
-            return result['home_st'] > result['away_st']
+            return result['home_score'] > result['away_score']
 
         if outcome_id == '10212':
-            return result['home_st'] == result['away_st']
+            return result['home_score'] == result['away_score']
 
         if outcome_id == '10213':
-            return result['away_st'] > result['home_st']
+            return result['away_score'] > result['home_score']
 
         if outcome_id == '108':
             return goals_ft > 1.5
@@ -1905,10 +1951,17 @@ class ValueBetScanner:
 
         fixture_ids = []
         for b in self.confirmed_bets:
+            fixture_id = b['fixture_id']
+            data = self.odds_client.get_fixture(fixture_id)
+            if data:
+                status = data['statusName']
+                if not status == "Finished":
+                    continue
+
             if not b['fixture_id'].startswith('manual_') \
                     and b['status'] == 'open':
 
-                    fixture_ids.append(b['fixture_id'])
+                    fixture_ids.append(fixture_id)
 
         scores = self.odds_client.get_scores(fixture_ids)
         updated = wins = losses = 0
@@ -2070,12 +2123,26 @@ class ValueBetScanner:
             self._save_seen()
             logger.info(f"Found {len(value_bets)} value bets for sport ID {id}")
             self.is_scanning = True
-            
+
+            value_bets.sort(
+                key=lambda bet: bet.ev_percentage,
+                reverse=True
+            )
+
             for bet in value_bets:
                 if not self.is_scanning:
                     break
                 if self.telegram:
+                    if (bet.market_id == '12245' or bet.market_id == '12247') \
+                        and bet.soft_bookmaker == 'bet365':
+                        continue
+
+                    if (bet.market_id == '181' or bet.market_id == '182') \
+                        and bet.soft_bookmaker == 'bc.game':
+                        continue
+
                     self.telegram.send_value_bet_notification(bet)
+
                 else:
                     self._log_bet(bet)
     

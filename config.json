@@ -240,7 +240,7 @@
   "min_win_probability": 12,
   "kelly_fraction": 0.10,
   "bankroll": 1000,
-  "sport_id": [10, 12, 13, 11, 14, 31],
+  "sport_id": [10, 12, 13, 11, 18, 14, 31],
   "max_tournaments": 40,
   "days_ahead": 14,
   "request_delay": 1.0,
