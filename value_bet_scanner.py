@@ -1240,6 +1240,9 @@ class ManualBetSession:
                 settlement_status='PENDING',
                 
             )
+        
+        else:
+            return None
 
 
 class TelegramBot:
@@ -1506,7 +1509,7 @@ class TelegramBot:
             elif cmd == '/stop':
                 self.send_message("*Scanner GESTOPT*", chat_id=chat_id)
             if cmd == '/set':
-                 self.send_message("*Updateing Settlements*", chat_id=chat_id)
+                 self.send_message("*UPDATING Settlements*", chat_id=chat_id)
                 
             return handler()
         return None
@@ -1548,6 +1551,7 @@ class TelegramBot:
         bankroll = self.sheets.get_bankroll() if self.sheets else 500
         try:
             bet = session.to_value_bet(bankroll)
+
         except (ValueError, KeyError) as e:
             self.send_message(
                 f"*Fout bij verwerking:* {e}\n\nStart opnieuw met /manueel",
@@ -1557,6 +1561,9 @@ class TelegramBot:
             return {'action': 'manueel_error'}
 
         del self._manual_sessions[chat_id]
+
+        if bet is None:
+            self.send_message("Bet voldoet niet aan de criteria, log een ander bet")
 
         # Show summary with confirm/reject buttons
         odds_table = self._format_odds_table(
@@ -1954,8 +1961,12 @@ class ValueBetScanner:
             fixture_id = b['fixture_id']
             data = self.odds_client.get_fixture(fixture_id)
             if data:
-                status = data['statusName']
-                if not status == "Finished":
+                try:
+                    status = data['statusName']
+                    if not status == "Finished":
+                        continue
+
+                except KeyError:
                     continue
 
             if not b['fixture_id'].startswith('manual_') \
@@ -1967,11 +1978,10 @@ class ValueBetScanner:
         updated = wins = losses = 0
         if not scores:
             logger.info("Cannot set settlements, no finished bets found")
-            return "Geen open bets gevonden om bij te werken"
+            return "Geen beëindigde bets gevonden om bij te werken"
 
         if self.sheets:
             for i in scores:
-                print(i)
                 for bet in self.confirmed_bets:
                     fid = bet['fixture_id']
                     if fid != i['fixtureId']:
@@ -2188,7 +2198,7 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                                 self._log_bet(bet)
 
                         elif action == 'set':
-                            logger.info("Updateing settlements")
+                            logger.info("UPDATING settlements")
                             msg = self.update_settlements()
                             logger.info("Updating dashboard totals")
                             self.telegram.send_message("Updating dashboard totals")
@@ -2255,10 +2265,11 @@ def main():
                         help='Telegram interactive mode')
     parser.add_argument('--sport', type=int, nargs='+', help="Sport ID's")
     parser.add_argument('--ev', type=float, help='Minimum EV % per bet')
-    parser.add_argument('--days', type=float, help='Aantal dagen voorgaand de matches')
+    parser.add_argument('--days', type=float, help='Aantal dagen voorgaand aan de matches')
     parser.add_argument('--max_tournaments', type=float, help="Maximum aantal te verwerken tournaments")
     parser.add_argument('--kelly', type=float, help='Fractie van kelly om stake te bepalen, default: 0.1')
     parser.add_argument('--win_prob', type=float, help='Minimum % winkans op de outcome, default: 8')
+    parser.add_argument('--set', help='Settlements bijwerken', action='store_true')
 
     args = parser.parse_args()
     config = load_config(args.config)
@@ -2287,11 +2298,20 @@ def main():
 
 
     scanner = ValueBetScanner(config)
+    if args.set:
+        logger.info("UPDATING settlements")
+        msg = scanner.update_settlements()
+        logger.info("Updating dashboard totals")
+        scanner.telegram.send_message("Updating dashboard totals")
+        msg_dashboard = scanner.update_main_sheet_totals()
+        scanner.telegram.send_message(f"*Settlements*\n\n{msg}")
+        scanner.telegram.send_message(msg_dashboard)
 
-    if args.interactive:
-        scanner.run_interactive()
     else:
-        scanner.run_single()
+        if args.interactive:
+            scanner.run_interactive()
+        else:
+            scanner.run_single()
 
 
 if __name__ == '__main__':
