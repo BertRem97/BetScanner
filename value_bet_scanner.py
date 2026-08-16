@@ -190,7 +190,7 @@ class OddsPapiClient:
 
     # Sharp books used only for median reference, NOT as bet targets
     SHARP_BOOKMAKERS = [
-        'pinnacle', 'sbobet', 'bwin.be', 'betonline.ag'
+        'pinnacle', 'sbobet', 'bwin.be', 'betonline.ag', 'ps3838', 'smarkets'
     ]
 
     def __init__(self, api_keys, settlements, requests_per_key: int = 250):
@@ -535,17 +535,19 @@ class ValueBetCalculator:
         if not sport_data:
             return value_bets
 
-
         sport_name = next(iter(sport_data))
         sport_markets = sport_data[sport_name]
         market_ids = list(sport_markets.keys())
              
         # Collect median odds from sharp bookmakers
         sharp_prices_by_outcome: Dict[str, Dict[str, Dict[str, float]]] = {}
+        sharp_bookies_found = 0
         for sharp in OddsPapiClient.SHARP_BOOKMAKERS:
+            
             if sharp not in bookmaker_odds:
                 continue
 
+            sharp_bookies_found += 1
             markets = self.odds_client.extract_odds_from_market(
                 bookmaker_odds[sharp],
                 market_ids
@@ -553,13 +555,15 @@ class ValueBetCalculator:
             
             for market_id, market_odds in markets.items():
                 for outcome_id, price in market_odds.items():
-                    sharp_prices_by_outcome \
-                        .setdefault(market_id, {}) \
-                        .setdefault(outcome_id, {})[sharp] = price \
+                    if sharp_bookies_found >= len(OddsPapiClient.SHARP_BOOKMAKERS) - 2:
+                        sharp_prices_by_outcome \
+                            .setdefault(market_id, {}) \
+                            .setdefault(outcome_id, {})[sharp] = price \
 
 
         if not sharp_prices_by_outcome:
             return value_bets
+
 
         median_sharp_odds = {}
 
