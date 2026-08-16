@@ -190,7 +190,7 @@ class OddsPapiClient:
 
     # Sharp books used only for median reference, NOT as bet targets
     SHARP_BOOKMAKERS = [
-        'pinnacle', 'sbobet', 'bet365', 'bwin.be', 'betonline.ag'
+        'pinnacle', 'sbobet', 'bwin.be', 'betonline.ag'
     ]
 
     def __init__(self, api_keys, settlements, requests_per_key: int = 250):
@@ -603,9 +603,22 @@ class ValueBetCalculator:
                     continue
 
                 best_book = max(all_soft, key=lambda b: all_soft[b])
+
+                if (market_id == '12245' or market_id == '12247') \
+                    and best_book == 'bet365':
+                    continue
+            
+                if (market_id == '181' or market_id == '182') \
+                    and best_book == 'bc.game':
+                    continue
+
                 best_odds = all_soft[best_book]
                 ev = self.calculate_ev(best_odds, median_sharp)
                 win_prob = self.calculate_implied_probability(median_sharp)
+
+                if not ev <= 100:
+                    continue
+
 
                 if (ev >= self.min_ev_threshold and win_prob * 100 >= self.min_win_prob):
                     start_data = fixture.get('startTime', '').split('T')
@@ -1250,8 +1263,10 @@ class TelegramBot:
 
     def __init__(self, config: dict,
                  sheets: GoogleSheetsManager = None):
+
         self.bot_token = config['telegram_bot_token']
         self.chat_id = config['telegram_chat_id']
+        self.chat_id_performance = config["performance_chat_id"]
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
         self.sheets = sheets
         self.pending_bets: Dict[int, ValueBet] = {}
@@ -1452,23 +1467,13 @@ class TelegramBot:
         self.answer_callback(callback_id)
 
         if data.startswith('confirm_') and message_id in self.pending_bets:
-            bet = self.pending_bets.pop(message_id)
-            self.edit_message(
-                message_id,
-                f"*BEVESTIGD*\n\n"
-                f"{bet.participant1} vs {bet.participant2}\n"
-                f"{bet.soft_bookmaker} @ {bet.soft_odds}\n"
-                f"Inzet: {bet.stake_amount:.2f}"
-            )
-            return {'action': 'confirm', 'bet': bet}
+            bet = self.pending_bets[message_id]
+            return {'action': 'confirm', 'bet': bet, 'message_id': message_id}
 
         if data.startswith('reject_') and message_id in self.pending_bets:
             bet = self.pending_bets.pop(message_id)
-            self.edit_message(
-                message_id,
-                f"*AFGEWEZEN*\n\n{bet.participant1} vs {bet.participant2}"
-            )
-            return {'action': 'reject'}
+            
+            return {'action': 'reject', 'bet': bet, 'message_id': message_id}
 
         return None
 
@@ -1493,7 +1498,6 @@ class TelegramBot:
             '/run':      lambda: {'action': 'run'},
             '/stop':     lambda: {'action': 'stop'},
             '/current':   self._cmd_profit,
-            '/keys':     self._cmd_keys,
             '/overview': self._cmd_overview,
             '/show_config': self._cmd_show_config,
             '/set':      lambda: {'action': 'set'},
@@ -1509,7 +1513,7 @@ class TelegramBot:
             elif cmd == '/stop':
                 self.send_message("*Scanner GESTOPT*", chat_id=chat_id)
             if cmd == '/set':
-                 self.send_message("*UPDATING Settlements*", chat_id=chat_id)
+                 self.send_message("*UPDATING Settlements*", chat_id=self.chat_id_performance)
                 
             return handler()
         return None
@@ -1619,7 +1623,7 @@ Days ahead: {self.config.get('days_ahead', "Onbekend")}\n
 {bookies}
         """
 
-        self.send_message(msg)
+        self.send_message(msg, chat_id=self.chat_id_performance)
         return {'action': 'config'}
 
 
@@ -1636,7 +1640,7 @@ Days ahead: {self.config.get('days_ahead', "Onbekend")}\n
             ev = float(p['Gemiddelde EV'])
             profit = float(p['Winst'])
 
-            self.send_message(f"""*Maand Overview*\n\n
+            self.send_message(chat_id=self.chat_id_performance, text=f"""*Maand Overview*\n\n
 Totaal Bets: {total_bets}
 Open Bets: {open_bets}
 Gewonnen Bets: {bets_won}
@@ -1653,21 +1657,6 @@ Winst: €{profit:.2f}
             self.send_message("Google Sheets niet geconfigureerd")
         return {'action': 'profit'}
 
-    def _cmd_keys(self) -> Dict:
-        if self._scanner and hasattr(self._scanner, 'odds_client'):
-            s = self._scanner.odds_client.get_key_status()
-            msg = (
-                f"*API Keys*\n\n"
-                f"Totaal: {s['total_requests']}\n"
-                f"Resterend: {s['total_remaining']}\n\n"
-            )
-            for i, k in enumerate(s['keys'], 1):
-                msg += f"Key {i}: {k['usage']}/{k['limit']} ({k['remaining']} over)\n"
-            self.send_message(msg)
-        else:
-            self.send_message("Scanner niet beschikbaar")
-        return {'action': 'keys'}
-
     def _cmd_overview(self) -> Dict:
         if self.sheets:
             br = self.sheets.get_bankroll()
@@ -1678,7 +1667,7 @@ Winst: €{profit:.2f}
             avg_win = float(data.get('Average win rate', 0))
             total_profit = float(data.get('Totaal winst', 0))
 
-            self.send_message(f"""*Overview*\n\n \
+            self.send_message(chat_id=self.chat_id_performance, text=f"""*Overview*\n\n \
 Bankroll: €{br:.2f}
 Average ROI: {avg_roi:.1%}
 Average EV: {avg_ev:.1%}
@@ -1689,7 +1678,7 @@ Profit: €{total_profit:.2f}
             )
         
         else:
-            self.send_message("Google Sheets niet geconfigureerd")
+            self.send_message(text="Google Sheets niet geconfigureerd", chat_id=self.chat_id_performance)
 
         return {'action': 'bankroll'}
     
@@ -1774,7 +1763,7 @@ class ValueBetScanner:
                     self.confirmed_bets = json.load(f)
 
                 self.confirmed_bet_keys = {
-                    f"{b['fixture_id']}_{b['soft_bookmaker']}_{b['outcome_id']}"
+                    f"{b['fixture_id']}_{b['outcome_id']}"
                     for b in self.confirmed_bets
                 
                 }
@@ -2122,8 +2111,8 @@ class ValueBetScanner:
 
                     bets = self.calculator.analyze_fixture(fixture, odds_data, bankroll)
                     for bet in bets:
-                        key = f"{bet.fixture_id}_{bet.soft_bookmaker}_{bet.outcome_id}"
-
+                        key = f"{bet.fixture_id}_{bet.outcome_id}"
+                        
                         if key not in self.confirmed_bet_keys:
                             value_bets.append(bet)
 
@@ -2150,6 +2139,10 @@ class ValueBetScanner:
                     if (bet.market_id == '181' or bet.market_id == '182') \
                         and bet.soft_bookmaker == 'bc.game':
                         continue
+
+                    if bet.ev_percentage >= 100:
+                        continue
+
 
                     self.telegram.send_value_bet_notification(bet)
 
@@ -2191,20 +2184,55 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                         elif action == 'stop':
                             self.is_scanning = False
 
-
+                        elif action == "reject":
+                            bet = result.get('bet')
+                            message_id = result.get('message_id')
+                            if bet and message_id:
+                                self.telegram.edit_message(
+                                message_id,
+                                f"*AFGEWEZEN* ❌\n\n{bet.participant1} vs {bet.participant2}"
+                            )
+                            
                         elif action == 'confirm':
                             bet = result.get('bet')
-                            if bet:
-                                self._log_bet(bet)
+                            message_id = result.get('message_id')
 
+                            if bet and message_id:
+                                success = self._log_bet(bet)
+
+                                if success:
+                                    # Pas verwijderen nadat het opslaan gelukt is
+                                    self.telegram.pending_bets.pop(message_id, None)
+
+                                    self.telegram.edit_message(
+                                        message_id,
+                                        f"*BEVESTIGD* ✅\n\n"
+                                        f"{bet.participant1} vs {bet.participant2}\n"
+                                        f"{bet.soft_bookmaker} @ {bet.soft_odds}\n"
+                                        f"Inzet: {bet.stake_amount:.2f}"
+                                    )
+
+                                else:
+                                    self.telegram.send_message(
+                                        message_id,
+                                        f"*LOGGEN MISLUKT* ❌\n\n"
+                                        f"{bet.participant1} vs {bet.participant2}\n\n"
+                                        f"Probeer opnieuw door op BEVESTIG te drukken."
+                                    )
+            
+                                    
                         elif action == 'set':
                             logger.info("UPDATING settlements")
                             msg = self.update_settlements()
                             logger.info("Updating dashboard totals")
-                            self.telegram.send_message("Updating dashboard totals")
+                            self.telegram.send_message(text="Updating dashboard totals", 
+                                                       chat_id=self.telegram.chat_id_performance)
                             msg_dashboard = self.update_main_sheet_totals()
-                            self.telegram.send_message(f"*Settlements*\n\n{msg}")
-                            self.telegram.send_message(msg_dashboard)
+                            self.telegram.send_message(f"*Settlements*\n\n{msg}",
+                                                       self.telegram.chat_id_performance)
+                            
+                            self.telegram.send_message(msg_dashboard, 
+                                                       self.telegram.chat_id_performance )
 
                 time.sleep(1)
 
@@ -2227,8 +2255,11 @@ Gebruik /manueel om zelf een weddenschap te loggen.
             if self.sheets.append_row(row, sheet_name=sheet_name):
                 self._save_confirmed(bet)
                 logger.info(f"Bet opgeslagen: {bet.fixture_id}")
+                return True
+            
             else:
                 logger.info(f"Bet niet kunnen opslaan: {bet.fixture_id}")
+                return False
 
 
     def run_single(self):
