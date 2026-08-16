@@ -2178,7 +2178,7 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                         elif action == 'stop':
                             self.is_scanning = False
 
-                        elif action == "reject":
+                        elif action == 'reject':
                             bet = result.get('bet')
                             message_id = result.get('message_id')
                             if bet and message_id:
@@ -2210,8 +2210,9 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                                     self.telegram.send_message(
                                         message_id,
                                         f"*LOGGEN MISLUKT* ❌\n\n"
-                                        f"{bet.participant1} vs {bet.participant2}\n\n"
-                                        f"Probeer opnieuw door op BEVESTIG te drukken."
+                                        f"{bet.participant1} vs {bet.participant2}\n"
+                                        f"{bet.outcome}\n\n"
+                                        f"Probeer bet opnieuw te loggen."
                                     )
             
                                     
