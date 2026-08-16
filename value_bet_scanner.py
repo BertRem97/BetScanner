@@ -176,7 +176,7 @@ class OddsPapiClient:
 
 
     SOFT_BOOKMAKERS = [
-        'betcenter.be', 'unibet.be', 'starcasino.be', 'betano', 'goldenpalacesports.be',
+        'betcenter.be', 'unibet.be', 'betano', 'goldenpalacesports.be',
         'bwin.be', 'napoleonsports.be', 'bet365', 'bcgame'
 
         #ladbrokes.be
@@ -548,14 +548,14 @@ class ValueBetCalculator:
                 continue
 
             sharp_bookies_found += 1
-            markets = self.odds_client.extract_odds_from_market(
-                bookmaker_odds[sharp],
-                market_ids
-                )
-            
-            for market_id, market_odds in markets.items():
-                for outcome_id, price in market_odds.items():
-                    if sharp_bookies_found >= len(OddsPapiClient.SHARP_BOOKMAKERS) - 2:
+            if sharp_bookies_found >= len(OddsPapiClient.SHARP_BOOKMAKERS) - 3:
+                markets = self.odds_client.extract_odds_from_market(
+                    bookmaker_odds[sharp],
+                    market_ids
+                    )
+                
+                for market_id, market_odds in markets.items():
+                    for outcome_id, price in market_odds.items():
                         sharp_prices_by_outcome \
                             .setdefault(market_id, {}) \
                             .setdefault(outcome_id, {})[sharp] = price \
@@ -615,6 +615,7 @@ class ValueBetCalculator:
                 if (market_id == '181' or market_id == '182') \
                     and best_book == 'bc.game':
                     continue
+
 
                 best_odds = all_soft[best_book]
                 ev = self.calculate_ev(best_odds, median_sharp)
@@ -2135,25 +2136,14 @@ class ValueBetScanner:
             for bet in value_bets:
                 if not self.is_scanning:
                     break
+
                 if self.telegram:
-                    if (bet.market_id == '12245' or bet.market_id == '12247') \
-                        and bet.soft_bookmaker == 'bet365':
-                        continue
-
-                    if (bet.market_id == '181' or bet.market_id == '182') \
-                        and bet.soft_bookmaker == 'bc.game':
-                        continue
-
-                    if bet.ev_percentage >= 100:
-                        continue
-
-
                     self.telegram.send_value_bet_notification(bet)
 
-                else:
-                    self._log_bet(bet)
-    
 
+        self.telegram.send_message("Scanner *KLAAR*")        
+
+         
     def run_interactive(self):
         if not self.telegram:
             logger.error("Telegram not configured")
