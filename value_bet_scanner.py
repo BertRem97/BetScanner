@@ -2301,6 +2301,8 @@ def main():
     parser.add_argument('--kelly', type=float, help='Fractie van kelly om stake te bepalen, default: 0.1')
     parser.add_argument('--win_prob', type=float, help='Minimum % winkans op de outcome, default: 8')
     parser.add_argument('--set', help='Settlements bijwerken', action='store_true')
+    parser.add_argument('--show_month_performance', help='Toon het overzicht van de huidige maand', action='store_true')
+    parser.add_argument('--show_total_performance', help='Toon het totaaloverzicht', action='store_true')
 
     args = parser.parse_args()
     config = load_config(args.config)
@@ -2337,6 +2339,12 @@ def main():
         msg_dashboard = scanner.update_main_sheet_totals()
         scanner.telegram.send_message(f"*Settlements*\n\n{msg}")
         scanner.telegram.send_message(msg_dashboard)
+
+    if args.show_month_performance:
+        scanner.telegram._cmd_profit
+
+    if args.show_total_performance:
+        scanner.telegram._cmd_overview
 
     else:
         if args.interactive:
