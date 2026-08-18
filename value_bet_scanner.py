@@ -225,46 +225,39 @@ class OddsPapiClient:
                 params=params,
                 timeout=(10, 60)
             )
-            
-            if response.status_code == 429:
-                self.key_manager.record_error(api_key)
-                
-                return self._make_request(endpoint, params)
 
-            if response.status_code == 404:
-                try:
-                    error = response.json().get("error", "")
-                except ValueError:
-                    error = response.text.strip()
+    
+            error = response.json().get("error", None)
 
-                if error.get("message") == "No scores found for the specified fixture.":
-                    logger.info(f"No scores found for: {response.url}")
-                    return None
-
-            if response.status_code == 403:
-                try:
-                    error = response.json().get("error", "")
-                except ValueError:
-                    error = response.text.strip()
-
-                    
-                if error == "Forbidden":
-                    logger.warning("Forbidden 403 -> rotate IP address")
-                    
-                    self.rotate_ip()
-                    time.sleep(5)
+            if error:
+                if response.status_code == 429:
                     return self._make_request(endpoint, params)
-                
-            self.key_manager.record_request(api_key)
+
+                if response.status_code == 404:
+                    if error.get("message") == "No scores found for the specified fixture.":
+                        logger.info(f"No scores found for: {response.url}")
+                        return None
+
+                if response.status_code == 403:
+                    if error.get("message") == "Forbidden":
+                        logger.warning("Forbidden 403 -> rotate IP address")
+                        
+                        self.rotate_ip()
+                        time.sleep(5)
+                        return self._make_request(endpoint, params)
+
+                else:
+                    if error.get("message") == "No scores found for the specified fixture.":
+                        return None
+                    if error.get("message") == "Invalid fixture ID provided.":
+                        return None
+
             return response
         
         except Exception as e:
-            self.key_manager.record_error(api_key)
             raise
     
 
-    def get_key_status(self) -> Dict:
-        return self.key_manager.get_status()
 
     def get_sports(self) -> List[Dict]:
         try:
@@ -1000,6 +993,7 @@ class GoogleSheetsManager:
 
     def get_all_rows(self, sheet_range: str = None) -> List[List[str]]:
         if not self.available:
+            print("NOPE")
             return []
         if sheet_range is None:
             sheet_name = self.get_or_create_monthly_sheet()
@@ -1978,7 +1972,7 @@ class ValueBetScanner:
             for i in scores:
                 for bet in self.confirmed_bets:
                     fid = bet['fixture_id']
-                    if fid != i['fixtureId']:
+                    if fid != i.get('fixtureId', None):
                         continue
 
                     outcome_id = bet['outcome_id']
@@ -2330,10 +2324,10 @@ def main():
         logger.info("UPDATING settlements")
         msg = scanner.update_settlements()
         logger.info("Updating dashboard totals")
-        scanner.telegram.send_message("Updating dashboard totals")
+        scanner.telegram.send_message("Updating dashboard totals", scanner.telegram.chat_id_performance)
         msg_dashboard = scanner.update_main_sheet_totals()
-        scanner.telegram.send_message(f"*Settlements*\n\n{msg}")
-        scanner.telegram.send_message(msg_dashboard)
+        scanner.telegram.send_message(f"*Settlements*\n\n{msg}", scanner.telegram.chat_id_performance)
+        scanner.telegram.send_message(msg_dashboard, scanner.telegram.chat_id_performance)
 
     if args.show_month_performance:
         scanner.telegram._cmd_profit
