@@ -134,6 +134,7 @@ class ValueBet:
     stake_amount: float
     bankroll: float
     kelly_fraction: float
+    possible_profit: float
     timestamp: str
     betslip_url: Optional[str] = None
     settlement_status: str = "PENDING"
@@ -165,7 +166,7 @@ class ValueBet:
             'Stake Amount': round(self.stake_amount, 2),
             'Kelly %': round(self.kelly_fraction, 4),
             'Betslip': self.betslip_url or '',
-            'Mogelijke winst': round(self.soft_odds * self.stake_amount - self.stake_amount,2)
+            'Mogelijke winst': round(self.possible_profit, 2)
         }
 
 
@@ -255,7 +256,8 @@ class OddsPapiClient:
             return response
         
         except Exception as e:
-            raise
+            return response
+            
     
 
 
@@ -272,7 +274,9 @@ class OddsPapiClient:
 
     def get_tournaments(self, sport_id: int = 10) -> List[Dict]:
         try:
+
             response = self._make_request("tournaments", {'sportId': sport_id})
+
             if response is None:
                 return None
             response.raise_for_status()
@@ -456,8 +460,10 @@ class OddsPapiClient:
         return odds
 
 
-    def get_outcome_betslip_url(self, bookmaker_data: Dict, outcome_id: str) -> Optional[str]:
-        fixture_path = bookmaker_data.get('fixturePath', '')
+    def get_outcome_betslip_url(self, bookmaker_data: Dict, outcome_id: str, best_bookmaker) -> Optional[str]:
+        fixture_path = bookmaker_data.get('fixturePath', '') \
+            if best_bookmaker in ("napoleonsports.be", "unibet.be", "bwin.be") else None
+        
         if not fixture_path:
             return None
 
@@ -467,9 +473,8 @@ class OddsPapiClient:
         outcome_data = outcomes.get(outcome_id, {})
         players = outcome_data.get('players', {})
         player_0 = players.get('0', {})
-        bookmaker_outcome_id = player_0.get('bookmakerOutcomeId', '')
-
-        if bookmaker_outcome_id:
+ 
+        if fixture_path:
             return fixture_path
         
         return None
@@ -524,7 +529,6 @@ class ValueBetCalculator:
         sport_id = str(fixture.get('sportId'))
         sport_data = mapping.get(sport_id, {})
 
-    
         if not sport_data:
             return value_bets
 
@@ -617,7 +621,6 @@ class ValueBetCalculator:
                 if not ev <= 100:
                     continue
 
-
                 if (ev >= self.min_ev_threshold and win_prob * 100 >= self.min_win_prob):
                     start_data = fixture.get('startTime', '').split('T')
                     start_date, start_time = start_data[0], start_data[1][:5]
@@ -626,7 +629,7 @@ class ValueBetCalculator:
                         win_prob, best_odds, bankroll, self.kelly_fraction
                     )
                     betslip_url = self.odds_client.get_outcome_betslip_url(
-                        bookmaker_odds[best_book], outcome_id
+                        bookmaker_odds[best_book], outcome_id, best_book
                     )
 
                     market_info = sport_markets.get(market_id)
@@ -665,7 +668,8 @@ class ValueBetCalculator:
                         bankroll=bankroll,
                         kelly_fraction=kelly_pct,
                         timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        betslip_url=betslip_url
+                        betslip_url=betslip_url,
+                        possible_profit= best_odds * stake_amount - stake_amount
                     ))
 
         return value_bets
@@ -1250,7 +1254,7 @@ class ManualBetSession:
                 timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 betslip_url=None, #betslip
                 settlement_status='PENDING',
-                
+                possible_profit= soft_odds * stake - stake
             )
         
         else:
@@ -1373,7 +1377,7 @@ class TelegramBot:
             f"*EV: {bet.ev_percentage:.2f}%*\n"
             f"Win kans: {bet.win_probability:.1%}\n\n"
             f"*Inzet: €{bet.stake_amount:.2f}*\n"
-            f"Mogelijke winst: €{bet.stake_amount * bet.soft_odds - bet.stake_amount:.2f}\n"
+            f"Mogelijke winst: €{bet.possible_profit:.2f}\n"
             f"(Kelly: {bet.kelly_fraction:.2%} van {bet.bankroll:.0f})\n\n"
             f"{betslip_line}"
         )
@@ -1506,6 +1510,7 @@ class TelegramBot:
         }
 
         handler = dispatch.get(cmd)
+        print(cmd)
         if handler:
             if cmd == '/run':
                 self.send_message("*Scanner GESTART*", chat_id=chat_id)
@@ -1782,6 +1787,7 @@ class ValueBetScanner:
             'timestamp': bet.timestamp,
             'soft_bookmaker': bet.soft_bookmaker,
             'soft_odds': bet.soft_odds,
+            'possible_profit': bet.possible_profit,
             'stake_amount': bet.stake_amount,
             'status': 'open'
         }
@@ -1969,6 +1975,8 @@ class ValueBetScanner:
             return "Geen beëindigde bets gevonden om bij te werken"
 
         if self.sheets:
+            total_profit = 0
+            total_loss = 0
             for i in scores:
                 for bet in self.confirmed_bets:
                     fid = bet['fixture_id']
@@ -1976,6 +1984,8 @@ class ValueBetScanner:
                         continue
 
                     outcome_id = bet['outcome_id']
+                    possible_profit = bet.get('possible_profit'), None
+                    potential_loss = bet['stake_amount']
 
                     if (fid == i['fixtureId'] and bet['status'] == 'open'):
                         results = i.get('scores').get('periods') 
@@ -2013,23 +2023,27 @@ class ValueBetScanner:
                             result['away_st'] = float(second_time_result.get("participant2Score"))
                         
 
-                        print(result)
-                        print("\nSTATS", fid, outcome_id)
-              
+                        
                         win = self.settle_match_winner(outcome_id, result)
                         
                         status = None
-                        if win:
-                            wins += 1
-                            status = "WIN"
-                        elif not win:
-                            losses += 1
-                            status = "LOSE"
+                        if win is not None:
+                            if win:
+                                wins += 1
+                                status = "WIN"
+                                total_profit += possible_profit \
+                                    if possible_profit else None
+                                
+                            elif not win:
+                                losses += 1
+                                total_loss += potential_loss
+                                status = "LOSE"
 
-                        print("\nSTATS", fid, outcome_id, status)
+                            print("MATCH", fid, outcome_id, status)
+                            print(result)
+                            print("-----------------------------------------")
                         
 
-                        if win is not None:
                             succes = self.sheets.update_settlement(fid, status, outcome_id)
                             if succes:
                                 print("Settlement Updated!")
@@ -2044,7 +2058,14 @@ class ValueBetScanner:
 
                                 updated += 1
 
-            return f"Bijgewerkt: {updated}\nGewonnen: {wins}\nVerloren: {losses}"
+            profit = round(total_profit - total_loss, 2)
+
+            return (
+                f"Bijgewerkt: {updated}\n"
+                f"Gewonnen: {wins}\n"
+                f"Verloren: {losses}\n\n"
+                + (f"€{profit} " + ("Winst" if profit > 0 else "Verlies") if possible_profit is not None else "")
+)
     
 
     def update_main_sheet_totals(self):
@@ -2056,14 +2077,12 @@ class ValueBetScanner:
         logger.info("Scanning...")
         bankroll = self.get_bankroll()
 
-        status = self.odds_client.get_key_status()
-        logger.info(f"API Status: {status['total_remaining']} requests remaining")
-
         sport_ids = self.config.get('sport_id', [])
     
         if not sport_ids:
             raise ValueError("No sport id's configured")
-            
+
+        counter = 0
         for id in sport_ids:
             value_bets = []
             tournaments = self.odds_client.get_tournaments(id)
@@ -2086,6 +2105,8 @@ class ValueBetScanner:
                     sport_id=id,
                     days_ahead=self.config.get('days_ahead', 7)
                 )
+
+          
                 if fixtures is None:
                     msg = "Kon data niet ophalen, probeer opnieuw met andere keys of roteer IP adress"
                     logger.info("Stopping scanner due to unforseen problems")
@@ -2118,7 +2139,8 @@ class ValueBetScanner:
                     time.sleep(self.config.get('request_delay', 1))
 
 
-            self._save_seen()
+            counter += len(value_bets)
+            finished_msg = f"{counter} value bets gevonden"
             logger.info(f"Found {len(value_bets)} value bets for sport ID {id}")
             self.is_scanning = True
 
@@ -2135,7 +2157,8 @@ class ValueBetScanner:
                     self.telegram.send_value_bet_notification(bet)
 
 
-        self.telegram.send_message("Scanner *KLAAR*")        
+        self.telegram.send_message("Scanner *KLAAR*") 
+        self.telegram.send_message(finished_msg)       
 
          
     def run_interactive(self):
@@ -2160,8 +2183,8 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                         action = result.get('action')
 
                         if action == 'run':
+                            print("RUNNING")
                             if not self.is_scanning:
-                                self.is_scanning = False
                                 self.is_scanning = True
 
                                 scan_thread = threading.Thread(
@@ -2337,9 +2360,9 @@ def main():
 
     else:
         if args.interactive:
+            print("Running interactive")
             scanner.run_interactive()
-        else:
-            scanner.run_single()
+ 
 
 
 if __name__ == '__main__':
