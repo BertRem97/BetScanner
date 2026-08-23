@@ -817,14 +817,13 @@ class GoogleSheetsManager:
 
 
             logger.info("Main sheet totals updated")
-            return "Dashboard totals succesvol bijgewerkt"
-
-        
+            
         except Exception as e:
             logger.error(f"Error updating totals: {e}, trying again")
             time.sleep(5)
             return self.update_main_sheet_totals()
 
+    
 
     def _fetch_sheet_meta(self) -> List[Dict]:
         """Single API call — returns the sheets array from spreadsheet metadata."""
@@ -997,7 +996,6 @@ class GoogleSheetsManager:
 
     def get_all_rows(self, sheet_range: str = None) -> List[List[str]]:
         if not self.available:
-            print("NOPE")
             return []
         if sheet_range is None:
             sheet_name = self.get_or_create_monthly_sheet()
@@ -1014,13 +1012,13 @@ class GoogleSheetsManager:
         except requests.exceptions.ReadTimeout:
             logger.info("Google sheets read timeout, trying again")
             time.sleep(5)
-            self.get_all_rows(sheet_range)
+            return self.get_all_rows(sheet_range)
 
         except Exception as e:
             logger.error(f"Error reading sheet: {e}")
             logger.info("Google sheets read timeout, trying again")
             time.sleep(5)
-            self.get_all_rows(sheet_range)
+            return self.get_all_rows(sheet_range)
 
     def update_cell(self, row: int, col: int, value: str,
                     sheet_name: str = None) -> bool:
@@ -1500,7 +1498,7 @@ class TelegramBot:
         dispatch = {
             '/run':      lambda: {'action': 'run'},
             '/stop':     lambda: {'action': 'stop'},
-            '/current':   self._cmd_profit,
+            '/current':  self._cmd_profit,
             '/overview': self._cmd_overview,
             '/show_config': self._cmd_show_config,
             '/set':      lambda: {'action': 'set'},
@@ -1511,6 +1509,7 @@ class TelegramBot:
 
         handler = dispatch.get(cmd)
         print(cmd)
+      
         if handler:
             if cmd == '/run':
                 self.send_message("*Scanner GESTART*", chat_id=chat_id)
@@ -1518,6 +1517,7 @@ class TelegramBot:
                 self.send_message("*Scanner GESTOPT*", chat_id=chat_id)
             if cmd == '/set':
                  self.send_message("*UPDATING Settlements*", chat_id=self.chat_id_performance)
+            
                 
             return handler()
         return None
@@ -1632,6 +1632,7 @@ Days ahead: {self.config.get('days_ahead', "Onbekend")}\n
 
 
     def _cmd_profit(self) -> Dict:
+        print('SHOWING MONTH')
         if self.sheets:
             p = self.sheets.get_profit_loss()
             total_bets = float(p['Totaal Bets'])
@@ -1644,7 +1645,7 @@ Days ahead: {self.config.get('days_ahead', "Onbekend")}\n
             ev = float(p['Gemiddelde EV'])
             profit = float(p['Winst'])
 
-            self.send_message(chat_id=self.chat_id_performance, text=f"""*Maand Overview*\n\n
+            msg = f"""*Maand Overview*\n\n
 Totaal Bets: {total_bets}
 Open Bets: {open_bets}
 Gewonnen Bets: {bets_won}
@@ -1655,11 +1656,11 @@ Inzet: €{inzet:.2f}
 Winst: €{profit:.2f}
             
             """
-            )
+            
+            return self.send_message(chat_id=self.chat_id_performance, text=msg)
 
         else:
-            self.send_message("Google Sheets niet geconfigureerd")
-        return {'action': 'profit'}
+            return self.send_message("Google Sheets niet geconfigureerd")
 
     def _cmd_overview(self) -> Dict:
         if self.sheets:
@@ -1975,8 +1976,8 @@ class ValueBetScanner:
             return "Geen beëindigde bets gevonden om bij te werken"
 
         if self.sheets:
-            total_profit = 0
-            total_loss = 0
+            total_profit = None
+            total_loss = None
             for i in scores:
                 for bet in self.confirmed_bets:
                     fid = bet['fixture_id']
@@ -1984,8 +1985,8 @@ class ValueBetScanner:
                         continue
 
                     outcome_id = bet['outcome_id']
-                    possible_profit = bet.get('possible_profit'), None
-                    potential_loss = bet['stake_amount']
+                    #possible_profit = bet.get('possible_profit', None)
+                    #potential_loss = bet['stake_amount']
 
                     if (fid == i['fixtureId'] and bet['status'] == 'open'):
                         results = i.get('scores').get('periods') 
@@ -2031,12 +2032,9 @@ class ValueBetScanner:
                             if win:
                                 wins += 1
                                 status = "WIN"
-                                total_profit += possible_profit \
-                                    if possible_profit else None
                                 
                             elif not win:
                                 losses += 1
-                                total_loss += potential_loss
                                 status = "LOSE"
 
                             print("MATCH", fid, outcome_id, status)
@@ -2058,15 +2056,16 @@ class ValueBetScanner:
 
                                 updated += 1
 
-            profit = round(total_profit - total_loss, 2)
-
+            #profit = round(total_profit - total_loss, 2)
+            msg_current = self.telegram._cmd_profit
             return (
                 f"Bijgewerkt: {updated}\n"
                 f"Gewonnen: {wins}\n"
                 f"Verloren: {losses}\n\n"
-                + (f"€{profit} " + ("Winst" if profit > 0 else "Verlies") if possible_profit is not None else "")
-)
-    
+                #+ (f"€{profit} " + ("Winst" if profit > 0 else "Verlies") if possible_profit is not None else "")
+                f"{msg_current}")
+                
+
 
     def update_main_sheet_totals(self):
         """Sum A2:F6 from all MM-YYYY sheets."""
@@ -2180,8 +2179,9 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                     result = self.telegram.process_update(update)
          
                     if result:
-                        action = result.get('action')
-
+                        action = result.get('action', None)
+                        print(action)
+                        print(action == 'current')
                         if action == 'run':
                             print("RUNNING")
                             if not self.is_scanning:
@@ -2237,14 +2237,14 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                             logger.info("UPDATING settlements")
                             msg = self.update_settlements()
                             logger.info("Updating dashboard totals")
-                            self.telegram.send_message(text="Updating dashboard totals", 
-                                                       chat_id=self.telegram.chat_id_performance)
-                            msg_dashboard = self.update_main_sheet_totals()
-                            self.telegram.send_message(f"*Settlements*\n\n{msg}",
-                                                       self.telegram.chat_id_performance)
+                            self.update_main_sheet_totals()
                             
-                            self.telegram.send_message(msg_dashboard, 
-                                                       self.telegram.chat_id_performance )
+                            self.telegram.send_message(f"*Settlements*\n\n"
+                                                       f"{msg}\n",
+                                                       self.telegram.chat_id_performance
+                                                       )
+                        
+
 
                 time.sleep(1)
 
