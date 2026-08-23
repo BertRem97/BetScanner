@@ -2179,9 +2179,11 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                     result = self.telegram.process_update(update)
          
                     if result:
-                        action = result.get('action', None)
-                        print(action)
-                        print(action == 'current')
+                        try:
+                            action = result.get('action') 
+                        except:
+                            action = None
+                        
                         if action == 'run':
                             print("RUNNING")
                             if not self.is_scanning:
