@@ -1498,8 +1498,8 @@ class TelegramBot:
         dispatch = {
             '/run':      lambda: {'action': 'run'},
             '/stop':     lambda: {'action': 'stop'},
-            '/current':  self._cmd_profit,
-            '/overview': self._cmd_overview,
+            '/overview': lambda: {'action': 'overview'},
+            '/current': lambda: {'action': 'current'},
             '/show_config': self._cmd_show_config,
             '/set':      lambda: {'action': 'set'},
             '/manueel':  lambda: self._cmd_manueel(chat_id),
@@ -1516,9 +1516,9 @@ class TelegramBot:
             elif cmd == '/stop':
                 self.send_message("*Scanner GESTOPT*", chat_id=chat_id)
             if cmd == '/set':
-                 self.send_message("*UPDATING Settlements*", chat_id=self.chat_id_performance)
+                self.send_message("*UPDATING Settlements*", chat_id=self.chat_id_performance)
+           
             
-                
             return handler()
         return None
 
@@ -1632,7 +1632,6 @@ Days ahead: {self.config.get('days_ahead', "Onbekend")}\n
 
 
     def _cmd_profit(self) -> Dict:
-        print('SHOWING MONTH')
         if self.sheets:
             p = self.sheets.get_profit_loss()
             total_bets = float(p['Totaal Bets'])
@@ -1657,10 +1656,10 @@ Winst: €{profit:.2f}
             
             """
             
-            return self.send_message(chat_id=self.chat_id_performance, text=msg)
+            return msg
 
         else:
-            return self.send_message("Google Sheets niet geconfigureerd")
+            return "Google Sheets niet geconfigureerd"
 
     def _cmd_overview(self) -> Dict:
         if self.sheets:
@@ -1672,7 +1671,7 @@ Winst: €{profit:.2f}
             avg_win = float(data.get('Average win rate', 0))
             total_profit = float(data.get('Totaal winst', 0))
 
-            self.send_message(chat_id=self.chat_id_performance, text=f"""*Overview*\n\n \
+            msg = f"""*Totaal Overzicht*\n\n
 Bankroll: €{br:.2f}
 Average ROI: {avg_roi:.1%}
 Average EV: {avg_ev:.1%}
@@ -1680,12 +1679,11 @@ Average winrate: {avg_win:.2%}
 Profit: €{total_profit:.2f}
 
 """
-            )
-        
-        else:
-            self.send_message(text="Google Sheets niet geconfigureerd", chat_id=self.chat_id_performance)
+            
+            return msg
 
-        return {'action': 'bankroll'}
+        else:
+            return "Google Sheets niet geconfigureerd"
     
 
     def _cmd_help(self) -> Dict:
@@ -2037,14 +2035,14 @@ class ValueBetScanner:
                                 losses += 1
                                 status = "LOSE"
 
+                            print("-----------------------------------------")
                             print("MATCH", fid, outcome_id, status)
                             print(result)
-                            print("-----------------------------------------")
-                        
-
+                            
                             succes = self.sheets.update_settlement(fid, status, outcome_id)
                             if succes:
                                 print("Settlement Updated!")
+                                print("-----------------------------------------")
                                 if (
                                     bet['fixture_id'] == fid
                                     and bet['outcome_id'] == outcome_id
@@ -2057,7 +2055,8 @@ class ValueBetScanner:
                                 updated += 1
 
             #profit = round(total_profit - total_loss, 2)
-            msg_current = self.telegram._cmd_profit
+            msg_current = self.telegram._cmd_profit()
+
             return (
                 f"Bijgewerkt: {updated}\n"
                 f"Gewonnen: {wins}\n"
@@ -2065,7 +2064,6 @@ class ValueBetScanner:
                 #+ (f"€{profit} " + ("Winst" if profit > 0 else "Verlies") if possible_profit is not None else "")
                 f"{msg_current}")
                 
-
 
     def update_main_sheet_totals(self):
         """Sum A2:F6 from all MM-YYYY sheets."""
@@ -2245,8 +2243,17 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                                                        f"{msg}\n",
                                                        self.telegram.chat_id_performance
                                                        )
-                        
 
+                        elif action == 'current':
+                            msg = self.telegram._cmd_profit()
+                            self.telegram.send_message(msg, 
+                                                       self.telegram.chat_id_performance)
+                            
+                        elif action == 'overview':
+                            msg = self.telegram._cmd_overview()
+                            self.telegram.send_message(msg,
+                                                       self.telegram.chat_id_performance)
+                
 
                 time.sleep(1)
 
@@ -2354,11 +2361,11 @@ def main():
         scanner.telegram.send_message(f"*Settlements*\n\n{msg}", scanner.telegram.chat_id_performance)
         scanner.telegram.send_message(msg_dashboard, scanner.telegram.chat_id_performance)
 
-    if args.show_month_performance:
-        scanner.telegram._cmd_profit
 
     if args.show_total_performance:
-        scanner.telegram._cmd_overview
+        msg = scanner.telegram._cmd_overview()
+        scanner.telegram.send_message(msg, 
+                                      scanner.telegram.chat_id_performance)
 
     else:
         if args.interactive:
