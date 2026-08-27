@@ -295,8 +295,8 @@ class OddsPapiClient:
             return self.get_tournaments(sport_id)
 
         except Exception as e:
-            logger.error(f"Error fetching tournaments: {e}")
-            return []
+            logger.error(f"Error fetching tournaments, retrying: {e}")
+            return self.get_tournaments(sport_id)
 
     def get_markets(self):
         response = self._make_request("markets")
@@ -1508,7 +1508,6 @@ class TelegramBot:
         }
 
         handler = dispatch.get(cmd)
-        print(cmd)
       
         if handler:
             if cmd == '/run':
@@ -2080,8 +2079,8 @@ class ValueBetScanner:
             raise ValueError("No sport id's configured")
 
         counter = 0
+        value_bets = []
         for id in sport_ids:
-            value_bets = []
             tournaments = self.odds_client.get_tournaments(id)
             if tournaments is None:
                 logger.info("Stopping scanner due to unforseen problems")
@@ -2138,14 +2137,14 @@ class ValueBetScanner:
 
             counter += len(value_bets)
             finished_msg = f"{counter} value bets gevonden"
-            logger.info(f"Found {len(value_bets)} value bets for sport ID {id}")
+            logger.info(f"\nFound {len(value_bets)} value bets for sport ID {id}")
             self.is_scanning = True
 
             value_bets.sort(
                 key=lambda bet: bet.ev_percentage,
                 reverse=True
             )
-
+            
             for bet in value_bets:
                 if not self.is_scanning:
                     break
@@ -2153,7 +2152,9 @@ class ValueBetScanner:
                 if self.telegram:
                     self.telegram.send_value_bet_notification(bet)
 
-
+            value_bets.clear()
+            
+       
         self.telegram.send_message("Scanner *KLAAR*") 
         self.telegram.send_message(finished_msg)       
 
@@ -2183,8 +2184,8 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                             action = None
                         
                         if action == 'run':
-                            print("RUNNING")
                             if not self.is_scanning:
+                                self.is_scanning = False
                                 self.is_scanning = True
 
                                 scan_thread = threading.Thread(
@@ -2193,6 +2194,7 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                                 scan_thread.start()
 
                         elif action == 'stop':
+                            logger.info("Stopping Scanner")
                             self.is_scanning = False
 
                         elif action == 'reject':
@@ -2357,10 +2359,8 @@ def main():
         msg = scanner.update_settlements()
         logger.info("Updating dashboard totals")
         scanner.telegram.send_message("Updating dashboard totals", scanner.telegram.chat_id_performance)
-        msg_dashboard = scanner.update_main_sheet_totals()
+        scanner.update_main_sheet_totals()
         scanner.telegram.send_message(f"*Settlements*\n\n{msg}", scanner.telegram.chat_id_performance)
-        scanner.telegram.send_message(msg_dashboard, scanner.telegram.chat_id_performance)
-
 
     if args.show_total_performance:
         msg = scanner.telegram._cmd_overview()
@@ -2369,7 +2369,6 @@ def main():
 
     else:
         if args.interactive:
-            print("Running interactive")
             scanner.run_interactive()
  
 
