@@ -122,13 +122,20 @@ class SureBet:
     market_id: str
     outcome: str
     outcome_id: str         # median sharp reference
-    soft_bookmaker: str        # best soft book for this bet
-    soft_odds: float           # odds at best soft book
+    soft_bookmaker1: str        # best soft book for this bet
+    soft_odds1: float  
+    soft_bookmaker2: str
+    soft_odds2: float         # odds at best soft book
     sport: str
-    stake_amount: float
+    stake_amount1: float
+    stake_amount2: float
     bankroll: float
-    guaranteed_profit_profit: float
-    betslip_url: Optional[str] = None
+    timestamp: str
+    p_guaranteed_profit: float
+    guaranteed_profit: float
+    betslip_url_book1: Optional[str] = None
+    betslip_url_book2: Optional[str] = None
+
 
     def to_dict(self) -> Dict:
 
@@ -143,7 +150,8 @@ class SureBet:
             'Outcome': self.outcome,
             'Land / Tournooi': self.category_name,
             'League': self.tournament_name,
-            'Soft Book': f"{self.soft_bookmaker} @ {self.soft_odds}",
+            'Soft Book': f"{self.soft_bookmaker1} @ {self.soft_odds1}" + \
+                f"\n{self.soft_bookmaker2} @ {self.soft_odds2}" if self.soft_bookmaker2 is not None else "",
             'Stake Amount': round(self.stake_amount, 2),
             'Betslip': self.betslip_url or '',
             'Gegarandeerde winst': round(self.guaranteed_profit, 2)
@@ -216,7 +224,7 @@ class OddsPapiClient:
 
 
     SOFT_BOOKMAKERS = [
-        'betcenter.be', 'unibet.be', 'betano', 'goldenpalacesports.be',
+        'cashpoint', 'unibet.be', 'betano', 'goldenpalacesports.be',
         'bwin.be', 'napoleonsports.be', 'bet365', 'bcgame'
 
         #ladbrokes.be
@@ -230,7 +238,7 @@ class OddsPapiClient:
 
     # Sharp books used only for median reference, NOT as bet targets
     SHARP_BOOKMAKERS = [
-        'pinnacle', 'sbobet', 'bwin.be', 'betonline.ag', 'ps3838', 'smarkets'
+        'pinnacle', 'sbobet', 'bwin.be', 'jackbit', 'betmgm', 'smarkets'
     ]
 
     def __init__(self, api_keys, settlements, confirmed_bets, requests_per_key: int = 250):
@@ -335,8 +343,8 @@ class OddsPapiClient:
             return self.get_tournaments(sport_id)
 
         except Exception as e:
-            logger.error(f"Error fetching tournaments: {e}")
-            return []
+            logger.error(f"Error fetching tournaments, retrying: {e}")
+            return self.get_tournaments(sport_id)
 
     def get_markets(self):
         response = self._make_request("markets")
@@ -476,8 +484,6 @@ class OddsPapiClient:
     ) -> Dict[str, Dict[str, float]]:
 
         odds = {}
-        sure_bets = {}
-
         markets = bookmaker_data.get('markets', {})
 
         for market_id in market_ids:
@@ -603,66 +609,168 @@ class ValueBetCalculator:
 
 
         for market_id, market_data in soft_odds_by_outcome.items():
-            for market_outcome, price in market_data.items():
-                for bet in self.confirmed_bets:
-                    try:
-                        fixture_id = bet['fixture_id']
-                        outcome_id = bet['outcome_id']
-                        status = bet['status']
-                        stake = bet['stake_amount']
-                        possible_profit = bet['possible_profit']
-                        soft_odds = bet['soft_odds']
+            for market_outcome, books_prices in market_data.items():
+               if len(soft_odds_by_outcome[market_id].keys()) == 2:
+
+                    current_outcome = market_outcome
+                    Next_outcome = next(iter(market_data))
+                    print(soft_odds_by_outcome)
+                    print(market_id)
+                    print(market_outcome)
+                    print(current_outcome)
+                    print(Next_outcome)
+                    all_soft_current = (
+                        soft_odds_by_outcome
+                        .get(market_id, {})
+                        .get(current_outcome, {})
+                    )
+
+                    all_soft_next = (
+                        soft_odds_by_outcome
+                        .get(market_id, {})
+                        .get(Next_outcome, {})
+                    )
+
+                    best_book_current = max(all_soft_current, key=lambda b: all_soft_current[b])
+                    best_book_next = max(all_soft_next, key=lambda b: all_soft_next[b])
+                    best_price_current = books_prices[best_book_current]
+                    best_price_next = books_prices[best_book_next]
+
+                    perc = 1 / best_price_current + 1 / best_price_next
+                    print('---------------------------')
+                    if perc < 1:
+                        print('OK')
+                        perc_profit = (1 /  perc - 1) 
+                        total_stake = 50
+
+                        market_info = sport_markets.get(market_id)
+                        market_name = next(iter(market_info))
+                        outcomes = market_info[market_name]
+
+                        outcome_name1 = outcomes.get(
+                            current_outcome,
+                            "Unknown"
+                        )
+
+                        outcome_name2 = outcomes.get(
+                            Next_outcome,
+                            "Unknown"
+                        )
+
+                        betslip_url_book1 = self.odds_client.get_outcome_betslip_url(
+                                                bookmaker_odds[best_book_current], current_outcome, best_book_current
+                        )
+
+                        betslip_url_book2 = self.odds_client.get_outcome_betslip_url(
+                                                                        bookmaker_odds[best_book_next], Next_outcome, best_book_next
+                                                )
+
+                        stake1 = total_stake / best_price_current / (1 / best_price_current + 1 / best_price_next)
+                        stake2 = total_stake / best_price_next / (1 / best_price_current + 1 / best_price_next)
+                        sure_bets.append(SureBet(
+                            fixture_id=fixtureId,
+                            participant1=fixture.get('participant1Name', 'Unknown'),
+                            participant2=fixture.get('participant2Name', 'Unknown'),
+                            start_time=f"{start_date} {start_time}",
+                            tournament_name=fixture.get('tournamentName', 'Unknown'),
+                            category_name=fixture.get('categoryName', 'Unknown'),
+                            market=market_name,
+                            market_id1=market_id,
+                            outcome1 = outcome_name1,
+                            outcome_id1=current_outcome,
+                            market_id2=market_id,
+                            outcome2 = outcome_name,
+                            outcome_id2=market_outcome,
+                            soft_bookmaker1=best_book_current,
+                            soft_bookmaker2=best_book_next,
+                            soft_odds1=best_price_current,
+                            soft_odds2=best_price_next,
+                            sport=sport_name,
+                            stake_amount1=stake1,
+                            stake_amount2=stake2,
+                            bankroll=bankroll,
+                            timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            betslip_url_book1=betslip_url_book1,
+                            betslip_url_book2=betslip_url_book2,
+                            guaranteed_profit=(stake1 * best_price_current) - stake1,
+                            p_guaranteed_profit = perc_profit
+                        ))
+
+
+
+                    for bet in self.confirmed_bets:
+                        try:
+                            fixture_id = bet['fixture_id']
+                            outcome_id = bet['outcome_id']
+                            status = bet['status']
+                            stake = bet['stake_amount']
+                            possible_profit = bet['possible_profit']
+                            soft_odds = bet['soft_odds']
+                            marketId = bet['market_id']
+                            
+                        except KeyError:
+                            continue
+
                         
-                    except KeyError:
-                        continue
+                        if not all_soft:
+                            continue
+                    
 
-                    if fixture_id == fixtureId and status == 'open' and \
-                        len(soft_odds_by_outcome[market_id].keys()) == 2:
+                        if fixture_id == fixtureId and status == 'open' and \
+                            market_id == marketId:
+                            
+                            print('OKAY')
+                            if market_outcome != outcome_id:
+                                perc = 1 / soft_odds + 1 / best_price_current
 
-                        if market_outcome != outcome_id:
-                            perc = 1 / soft_odds + 1 / price
-                            if perc < 1:
-                                perc_profit = (1 /  perc - 1) 
-                                stake_amount = (possible_profit + stake) / price
+                                if perc < 1:
+                                    
+                                    perc_profit = (1 /  perc - 1) 
+                                    stake_amount = (possible_profit + stake) / best_price_current
 
-                                market_info = sport_markets.get(market_id)
+                                    market_info = sport_markets.get(market_id)
 
-                                if not market_info:
-                                    continue
+                                    if not market_info:
+                                        continue
 
-                                market_name = next(iter(market_info))
-                                outcomes = market_info[market_name]
+                                    market_name = next(iter(market_info))
+                                    outcomes = market_info[market_name]
 
-                                outcome_name = outcomes.get(
-                                    outcome_id,
-                                    "Unknown"
-                                )
+                                    outcome_name = outcomes.get(
+                                        outcome_id,
+                                        "Unknown"
+                                    )
 
-                                betslip_url = self.odds_client.get_outcome_betslip_url(
-                                                        bookmaker_odds[best_book], outcome_id, soft_book
-                                                    )
+                                    betslip_url = self.odds_client.get_outcome_betslip_url(
+                                                            bookmaker_odds[best_book], outcome_id, best_book
+                                    )
 
-                                sure_bets.append(SureBet(
-                                    fixture_id=fixtureId,
-                                    participant1=fixture.get('participant1Name', 'Unknown'),
-                                    participant2=fixture.get('participant2Name', 'Unknown'),
-                                    start_time=f"{start_date} {start_time}",
-                                    tournament_name=fixture.get('tournamentName', 'Unknown'),
-                                    category_name=fixture.get('categoryName', 'Unknown'),
-                                    market=market_name,
-                                    market_id=market_id,
-                                    outcome = outcome_name,
-                                    outcome_id=outcome_id,
-                                    soft_bookmaker=soft_book,
-                                    soft_odds=price,
-                                    sport=sport_name,
-                                    stake_amount=stake_amount,
-                                    bankroll=bankroll,
-                                    timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                    betslip_url=betslip_url,
-                                    guaranteed_profit= (possible_profit + stake) - (stake + stake_amount),
-                                    p_guaranteed_profit = perc_profit
-                                ))
+
+                                    sure_bets.append(SureBet(
+                                        fixture_id=fixtureId,
+                                        participant1=fixture.get('participant1Name', 'Unknown'),
+                                        participant2=fixture.get('participant2Name', 'Unknown'),
+                                        start_time=f"{start_date} {start_time}",
+                                        tournament_name=fixture.get('tournamentName', 'Unknown'),
+                                        category_name=fixture.get('categoryName', 'Unknown'),
+                                        market=market_name,
+                                        market_id=market_id,
+                                        outcome = outcome_name,
+                                        outcome_id=outcome_id,
+                                        soft_odds1=best_price_current,
+                                        soft_bookmaker2=None,                                
+                                        soft_odds2=None,                          
+                                        sport=sport_name,
+                                        stake_amount1=stake_amount,
+                                        stake_amount2=None,
+                                        bankroll=bankroll,
+                                        timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                        betslip_url_book1=betslip_url,
+                                        betslip_url_book2=None,
+                                        guaranteed_profit= (possible_profit + stake) - (stake + stake_amount),
+                                        p_guaranteed_profit = perc_profit
+
+                                    ))
 
 
              
@@ -784,7 +892,6 @@ class ValueBetCalculator:
                             possible_profit= best_odds * stake_amount - stake_amount
                         ))
 
-        
         return value_bets, sure_bets
 
 
@@ -1539,7 +1646,33 @@ class TelegramBot:
     # ------------------------------------------------------------------
     # Update polling
     # ------------------------------------------------------------------
-    
+    def discard_pending_updates(self):
+        try:
+            response = requests.get(
+                f"{self.base_url}/getUpdates",
+                params={
+                    "offset": -1,
+                    "timeout": 0
+                },
+                timeout=10
+            )
+
+            response.raise_for_status()
+            result = response.json()
+
+            updates = result.get("result", [])
+
+            if updates:
+                self.last_update_id = updates[-1]["update_id"]
+                logger.info(
+                    f"Discarded {len(updates)} pending Telegram update(s)"
+                )
+
+        except Exception:
+            logger.exception("Could not discard pending Telegram updates")
+
+
+
     def get_updates(self, timeout: int = 5) -> List[Dict]:
         try:
             response = requests.get(
@@ -1952,12 +2085,19 @@ class ValueBetScanner:
 
 
     def settle_match_winner(self, outcome_id, result):
-        try:
-            goals_ht = sum([result['home_ht'], result['away_ht']])
-            goals_ft = sum([result['home_score'], result['away_score']])
+        goals_ht = (
+            result.get('home_ht') or 0
+        ) + (
+            result.get('away_ht') or 0
+        )
 
-        except:
-            pass
+        goals_ft = (
+            result.get('home_end') or 0
+        ) + (
+            result.get('away_end') or 0
+        )
+        print('GOALS')
+        print(goals_ft)
 
         print(outcome_id, result)
         if outcome_id in ['181']:
@@ -2003,7 +2143,7 @@ class ValueBetScanner:
             return result['home_end'] > result['away_end']
         
         if outcome_id in ['111', '141', '191', '131', '313', '311']:
-            return result['home_score'] > result['away_score']
+            return result['home_end'] > result['away_end']
 
         if outcome_id == '101':
             return result['home_end'] > result['away_end']
@@ -2015,17 +2155,17 @@ class ValueBetScanner:
             return result['home_end'] < result['away_end']
         
         if outcome_id in ['314']:
-            return result['home_score'] == result['away_score']
+            return result['home_end'] == result['away_end']
 
         if outcome_id in ['112', '142', '192', '132', '182', '315', '312']:
-            return result['away_score'] > result['home_score']
+            return result['away_end'] > result['home_end']
 
         if outcome_id == '104':
-            return result['home_score'] != 0 and result['away_score'] != 0
+            return result['home_end'] != 0 and result['away_end'] != 0
 
         if outcome_id == '105':
-            return (result['home_score'] > 0 and result['away_score'] == 0) \
-            or (result['away_score'] > 0 and result['home_score'] == 0)
+            return (result['home_end'] > 0 and result['away_end'] == 0) \
+            or (result['away_end'] > 0 and result['home_end'] == 0)
 
         if outcome_id == '10302':
             return goals_ht <= goals_ft
@@ -2034,16 +2174,16 @@ class ValueBetScanner:
             return (goals_ht != 0 and goals_ft > goals_ht)
 
         if outcome_id == '101902':
-            return result['home_score'] > result['away_score'] \
-                    or result['home_score'] == result['away_score']
+            return result['home_end'] > result['away_end'] \
+                    or result['home_end'] == result['away_end']
 
         if outcome_id == '101903':
-            return result['home_score'] > result['away_score'] \
-                    or result['home_score'] < result['away_score']
+            return result['home_end'] > result['away_end'] \
+                    or result['home_end'] < result['away_end']
 
         if outcome_id == '101904':
-            return result['home_score'] == result['away_score'] or \
-                    result['away_score'] > result['home_score']
+            return result['home_end'] == result['away_end'] or \
+                    result['away_end'] > result['home_end']
 
         if outcome_id == '10208':
             if (result['home_ht'] and result['away_ht']) is None:
@@ -2058,18 +2198,19 @@ class ValueBetScanner:
             return result['away_ht'] > result['home_ht']
 
         if outcome_id == '10211':
-            return result['home_score'] > result['away_score']
+            return result['home_st'] > result['away_st']
 
         if outcome_id == '10212':
-            return result['home_score'] == result['away_score']
+            return result['home_st'] == result['away_st']
 
         if outcome_id == '10213':
-            return result['away_score'] > result['home_score']
+            return result['away_st'] > result['home_st']
 
         if outcome_id == '108':
             return goals_ft > 1.5
 
         if outcome_id == '109':
+            print(goals_ft)
             return goals_ft < 1.5
 
         if outcome_id == '1010':
@@ -2142,8 +2283,8 @@ class ValueBetScanner:
                         end_score_away = float(end_score.get("participant2Score"))
 
                         result = {
-                            "home_score": None,
-                            "away_score": None,
+                            "home_full_time": None,
+                            "away_full_time": None,
                             "home_ht": None,
                             "away_ht": None,
                             "home_st": None,
@@ -2158,8 +2299,8 @@ class ValueBetScanner:
                             result['away_ht'] = float(half_time_result.get("participant2Score"))
                             
                         if full_time_result:
-                            result['home_score'] = float(full_time_result.get("participant1Score"))
-                            result['away_score'] = float(full_time_result.get("participant2Score"))
+                            result['home_full_time'] = float(full_time_result.get("participant1Score"))
+                            result['away_full_time'] = float(full_time_result.get("participant2Score"))
                            
                         if second_time_result:
                             result['home_st'] = float(second_time_result.get("participant1Score"))
@@ -2272,6 +2413,7 @@ class ValueBetScanner:
                         continue
 
                     valueBets, sureBets = self.calculator.analyze_fixture(fixture, odds_data, bankroll)
+                    print(sureBets)
                     sure_bets = [bet for bet in sureBets]
                     for bet in valueBets:
                         key = f"{bet.fixture_id}_{bet.outcome_id}"
@@ -2295,6 +2437,13 @@ class ValueBetScanner:
                 key=lambda bet: bet.ev_percentage,
                 reverse=True
             )
+
+            print('TOTAL SURE BETS')
+            print(sure_bets)
+            print('-------------')
+            print('TOTAL VALUE BETS')
+            print(value_bets)
+
             for bet in sure_bets:
                 if not self.is_scanning:
                     break
@@ -2331,6 +2480,7 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                                    
 )
         scan_thread = None
+        self.telegram.discard_pending_updates()
         while True:
             try:
                 for update in self.telegram.get_updates():

@@ -177,7 +177,7 @@ class OddsPapiClient:
 
 
     SOFT_BOOKMAKERS = [
-        'betcenter.be', 'unibet.be', 'betano', 'goldenpalacesports.be',
+        'cashpoint', 'unibet.be', 'betano', 'goldenpalacesports.be',
         'bwin.be', 'napoleonsports.be', 'bet365', 'bcgame'
 
         #ladbrokes.be
@@ -191,7 +191,7 @@ class OddsPapiClient:
 
     # Sharp books used only for median reference, NOT as bet targets
     SHARP_BOOKMAKERS = [
-        'pinnacle', 'sbobet', 'bwin.be', 'betonline.ag', 'ps3838', 'smarkets'
+        'pinnacle', 'sbobet', 'bwin.be', 'jackbit', 'betmgm', 'smarkets'
     ]
 
     def __init__(self, api_keys, settlements, requests_per_key: int = 250):
@@ -219,7 +219,6 @@ class OddsPapiClient:
         if params is None:
             params = {}
         params['apiKey'] = api_key
-
         try:
             response = self.session.get(
                 f"{self.BASE_URL}/{endpoint}",
@@ -1396,7 +1395,31 @@ class TelegramBot:
     # ------------------------------------------------------------------
     # Update polling
     # ------------------------------------------------------------------
-    
+    def discard_pending_updates(self):
+        try:
+            response = requests.get(
+                f"{self.base_url}/getUpdates",
+                params={
+                    "offset": -1,
+                    "timeout": 0
+                },
+                timeout=10
+            )
+
+            response.raise_for_status()
+            result = response.json()
+
+            updates = result.get("result", [])
+
+            if updates:
+                self.last_update_id = updates[-1]["update_id"]
+                logger.info(
+                    f"Discarded {len(updates)} pending Telegram update(s)"
+                )
+
+        except Exception:
+            logger.exception("Could not discard pending Telegram updates")
+
     def get_updates(self, timeout: int = 5) -> List[Dict]:
         try:
             response = requests.get(
@@ -1917,13 +1940,13 @@ class ValueBetScanner:
                 return result['away_ht'] > result['home_ht']
 
             if outcome_id == '10211':
-                return result['home_st'] > result['away_st']
+                return result['home_full_time'] > result['away_full_time']
 
             if outcome_id == '10212':
-                return result['home_st'] == result['away_st']
+                return result['home_full_time'] == result['away_full_time']
 
             if outcome_id == '10213':
-                return result['away_st'] > result['home_st']
+                return result['away_full_time'] > result['home_full_time']
 
             if outcome_id == '108':
                 return goals_ft > 1.5
@@ -1955,20 +1978,19 @@ class ValueBetScanner:
 
         fixture_ids = []
         for b in self.confirmed_bets:
-            fixture_id = b['fixture_id']
-            data = self.odds_client.get_fixture(fixture_id)
-            if data:
-                try:
-                    status = data['statusName']
-                    if not status == "Finished":
+            if b['status'] == 'open':
+                fixture_id = b['fixture_id']
+                data = self.odds_client.get_fixture(fixture_id)
+                if data:
+                    try:
+                        status = data['statusName']
+                        if not status == "Finished":
+                            continue
+
+                    except KeyError:
                         continue
 
-                except KeyError:
-                    continue
-
-            if not b['fixture_id'].startswith('manual_') \
-                    and b['status'] == 'open':
-
+                if not b['fixture_id'].startswith('manual_'):
                     fixture_ids.append(fixture_id)
 
         scores = self.odds_client.get_scores(fixture_ids)
@@ -2177,6 +2199,7 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                                    
 )
         scan_thread = None
+        self.telegram.discard_pending_updates()
         while True:
             try:
                 for update in self.telegram.get_updates():
