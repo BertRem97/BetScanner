@@ -225,13 +225,15 @@ class OddsPapiClient:
                 params=params,
                 timeout=(10, 60)
             )
-
     
             error = response.json().get("error", None)
-
+    
             if error:
                 if response.status_code == 429:
-                    return self._make_request(endpoint, params)
+                    if error.get("message") == "Request limit exceeded":
+                        logger.info(f"API KEY {api_key} drained removing from list")
+                        self.api_keys.remove(api_key)
+                        return self._make_request(endpoint, params)
 
                 if response.status_code == 404:
                     if error.get("message") == "No scores found for the specified fixture.":
@@ -243,7 +245,7 @@ class OddsPapiClient:
                         logger.warning("Forbidden 403 -> rotate IP address")
                         
                         self.rotate_ip()
-                        time.sleep(5)
+                        time.sleep(3)
                         return self._make_request(endpoint, params)
 
                 else:
@@ -251,14 +253,13 @@ class OddsPapiClient:
                         return None
                     if error.get("message") == "Invalid fixture ID provided.":
                         return None
+                    
 
             return response
         
         except Exception as e:
             return response
             
-    
-
 
     def get_sports(self) -> List[Dict]:
         try:
@@ -1666,7 +1667,7 @@ Days ahead: {self.config.get('days_ahead', "Onbekend")}\n
             ev = float(p['Gemiddelde EV'])
             profit = float(p['Winst'])
 
-            msg = f"""*Maand Overview*\n\n
+            msg = f"""*Maand Overview*\n
 Totaal Bets: {total_bets}
 Open Bets: {open_bets}
 Gewonnen Bets: {bets_won}
@@ -1997,7 +1998,7 @@ class ValueBetScanner:
         updated = wins = losses = 0
         if not scores:
             logger.info("Cannot set settlements, no finished bets found")
-            return "Geen beëindigde bets gevonden om bij te werken"
+            return f"Geen beëindigde bets gevonden om bij te werken\n{len(self.odds_client.api_keys)} beschikbare api keys"
 
         if self.sheets:
             total_profit = None
@@ -2088,7 +2089,8 @@ class ValueBetScanner:
                 f"Gewonnen: {wins}\n"
                 f"Verloren: {losses}\n\n"
                 #+ (f"€{profit} " + ("Winst" if profit > 0 else "Verlies") if possible_profit is not None else "")
-                f"{msg_current}")
+                f"{msg_current}"
+                f"{len(self.odds_client.api_keys)} beschikbare api keys")
                 
 
     def update_main_sheet_totals(self):
@@ -2185,6 +2187,7 @@ class ValueBetScanner:
         self.telegram.send_message("Scanner *KLAAR*") 
         self.telegram.send_message(finished_msg)       
 
+        self.telegram.send_message(f"{len(self.odds_client.api_keys)} beschikbare api keys")
          
     def run_interactive(self):
         if not self.telegram:

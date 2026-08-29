@@ -120,10 +120,12 @@ class SureBet:
     category_name: str
     market: str
     market_id: str
-    outcome: str
-    outcome_id: str         # median sharp reference
+    outcome1: str
+    outcome_id1: str         # median sharp reference
     soft_bookmaker1: str        # best soft book for this bet
     soft_odds1: float  
+    outcome2: str
+    outcomeid_id2: str
     soft_bookmaker2: str
     soft_odds2: float         # odds at best soft book
     sport: str
@@ -137,22 +139,26 @@ class SureBet:
     betslip_url_book2: Optional[str] = None
 
 
+
     def to_dict(self) -> Dict:
 
         return {
             'Datum': self.timestamp,
             'Start wedstrijd': self.start_time,
             'Event fixture': self.fixture_id,
-            'Outcome id': self.outcome_id,
+            'Outcome id': self.outcome_id1 + f"\n{self.outcomeid_id2}" \
+                if self.outcomeid_id2 is not None else "",
             'Match': f"{self.participant1} - {self.participant2}",
             'Sport': self.sport,
             'Market': self.market,
-            'Outcome': self.outcome,
+            'Outcome': self.outcome1 + f"\n{self.outcome2}" \
+                if self.outcome2 is not None else "",
             'Land / Tournooi': self.category_name,
             'League': self.tournament_name,
-            'Soft Book': f"{self.soft_bookmaker1} @ {self.soft_odds1}" + \
-                f"\n{self.soft_bookmaker2} @ {self.soft_odds2}" if self.soft_bookmaker2 is not None else "",
-            'Stake Amount': round(self.stake_amount, 2),
+            'Soft Book': f"{self.outcome1} @ {self.soft_bookmaker1} @ {self.soft_odds1}" + \
+                f"\n{self.outcome2} @ {self.soft_bookmaker2} @ {self.soft_odds2}" if self.soft_bookmaker2 is not None else "",
+            'Stake Amount': f"{self.outcome1}: {round(self.stake_amount1, 2)}" + \
+                f"\n{self.outcome2}: {round(self.stake_amount2, 2)}" if self.outcome2 is not None else "",
             'Betslip': self.betslip_url or '',
             'Gegarandeerde winst': round(self.guaranteed_profit, 2)
         }
@@ -280,7 +286,11 @@ class OddsPapiClient:
 
             if error:
                 if response.status_code == 429:
-                    return self._make_request(endpoint, params)
+                    if error.get("message") == "Request limit exceeded":
+                        logger.info(f"API KEY {api_key} drained removing from list")
+                        self.api_keys.remove(api_key)
+                        return self._make_request(endpoint, params)
+                
 
                 if response.status_code == 404:
                     if error.get("message") == "No scores found for the specified fixture.":
@@ -295,12 +305,13 @@ class OddsPapiClient:
                         time.sleep(5)
                         return self._make_request(endpoint, params)
 
+                
                 else:
                     if error.get("message") == "No scores found for the specified fixture.":
                         return None
                     if error.get("message") == "Invalid fixture ID provided.":
                         return None
-
+    
             return response
         
         except Exception as e:
@@ -675,12 +686,11 @@ class ValueBetCalculator:
                             tournament_name=fixture.get('tournamentName', 'Unknown'),
                             category_name=fixture.get('categoryName', 'Unknown'),
                             market=market_name,
-                            market_id1=market_id,
+                            market_id=market_id,
                             outcome1 = outcome_name1,
                             outcome_id1=current_outcome,
-                            market_id2=market_id,
-                            outcome2 = outcome_name,
-                            outcome_id2=market_outcome,
+                            outcome2 = outcome_name2,
+                            outcome_id2=Next_outcome,
                             soft_bookmaker1=best_book_current,
                             soft_bookmaker2=best_book_next,
                             soft_odds1=best_price_current,
@@ -755,8 +765,10 @@ class ValueBetCalculator:
                                         category_name=fixture.get('categoryName', 'Unknown'),
                                         market=market_name,
                                         market_id=market_id,
-                                        outcome = outcome_name,
-                                        outcome_id=outcome_id,
+                                        outcome1 = outcome_name,
+                                        outcome_id1=outcome_id,
+                                        outcome2 = None,
+                                        outcome_id2 = None,
                                         soft_odds1=best_price_current,
                                         soft_bookmaker2=None,                                
                                         soft_odds2=None,                          
@@ -770,6 +782,7 @@ class ValueBetCalculator:
                                         guaranteed_profit= (possible_profit + stake) - (stake + stake_amount),
                                         p_guaranteed_profit = perc_profit
 
+                              
                                     ))
 
 
@@ -1919,7 +1932,7 @@ Days ahead: {self.config.get('days_ahead', "Onbekend")}\n
             ev = float(p['Gemiddelde EV'])
             profit = float(p['Winst'])
 
-            msg = f"""*Maand Overview*\n\n
+            msg = f"""*Maand Overview*\n
 Totaal Bets: {total_bets}
 Open Bets: {open_bets}
 Gewonnen Bets: {bets_won}
@@ -2256,7 +2269,7 @@ class ValueBetScanner:
         updated = wins = losses = 0
         if not scores:
             logger.info("Cannot set settlements, no finished bets found")
-            return "Geen beëindigde bets gevonden om bij te werken"
+            return f"Geen beëindigde bets gevonden om bij te werken\n{len(self.odds_client.api_keys)} beschikbare api keys"
 
         if self.sheets:
             total_profit = None
@@ -2347,7 +2360,9 @@ class ValueBetScanner:
                 f"Gewonnen: {wins}\n"
                 f"Verloren: {losses}\n\n"
                 #+ (f"€{profit} " + ("Winst" if profit > 0 else "Verlies") if possible_profit is not None else "")
-                f"{msg_current}")
+                f"{msg_current}"
+                f"{len(self.odds_client.api_keys)} beschikbare api keys"
+            )
                 
 
     def update_main_sheet_totals(self):
