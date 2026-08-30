@@ -148,8 +148,8 @@ class SureBet:
             'Datum': self.timestamp,
             'Start wedstrijd': self.start_time,
             'Event fixture': self.fixture_id,
-            'Outcome id': self.outcome_id1 + f"\n{self.outcomeid_id2}" \
-                if self.outcomeid_id2 is not None else "",
+            'Outcome id': self.outcome_id1 + f"\n{self.outcome_id2}" \
+                if self.outcome_id2 is not None else "",
             'Match': f"{self.participant1} - {self.participant2}",
             'Sport': self.sport,
             'Market': self.market,
@@ -159,9 +159,14 @@ class SureBet:
             'League': self.tournament_name,
             'Soft Book': f"{self.outcome1} @ {self.soft_bookmaker1} @ {self.soft_odds1}" + \
                 f"\n{self.outcome2} @ {self.soft_bookmaker2} @ {self.soft_odds2}" if self.soft_bookmaker2 is not None else "",
+            'Odds overzicht (soft)': "",
+            'Sharp Ref (mediaan)': "",
+            'EV %': "",
+            'Win Prob': "",
             'Stake Amount': f"{self.outcome1}: {round(self.stake_amount1, 2)}" + \
                 f"\n{self.outcome2}: {round(self.stake_amount2, 2)}" if self.outcome2 is not None else "",
-            'Betslip': self.betslip_url or '',
+            'Kelly %': "",
+            'Betslip': self.betslip_url_book1 or '',
             'Mogelijke winst': round(self.guaranteed_profit, 2)
         }
 
@@ -1622,7 +1627,7 @@ class TelegramBot:
                 )
 
             message += (
-                f"Totale inzet: €{self.config.get('total_stake_surebet'), 0}\n"
+                f"Totale inzet: €{self.config.get('total_stake_surebet', 0)}\n"
                 f"💵 *Verzekerde winst*: €{sure_bet.guaranteed_profit:.2f}\n"
                 f"{betslip_line}"
             )
@@ -1778,6 +1783,7 @@ class TelegramBot:
         callback_id = callback['id']
         data = callback.get('data', '')
         message_id = callback['message'].get('message_id')
+        _type = None
 
         try:
             _, _type = data.split('-')
@@ -2100,18 +2106,38 @@ class ValueBetScanner:
     def _save_seen(self):
         json.dump(list(self.seen_bets), open('seen_bets.json', 'w'))
 
-    def _save_confirmed(self, bet: ValueBet):
-        data = {
-            'fixture_id': bet.fixture_id,
-            'market_id': bet.market_id,
-            'outcome_id': bet.outcome_id,
-            'timestamp': bet.timestamp,
-            'soft_bookmaker': bet.soft_bookmaker,
-            'soft_odds': bet.soft_odds,
-            'possible_profit': bet.possible_profit,
-            'stake_amount': bet.stake_amount,
-            'status': 'open'
-        }
+    def _save_confirmed(self, value_bet: ValueBet=None, sure_bet: SureBet=None):
+        if value_bet:
+            data = {
+                'fixture_id': value_bet.fixture_id,
+                'market_id': value_bet.market_id,
+                'outcome_id': value_bet.outcome_id,
+                'timestamp': value_bet.timestamp,
+                'soft_bookmaker': value_bet.soft_bookmaker,
+                'soft_odds': value_bet.soft_odds,
+                'possible_profit': value_bet.possible_profit,
+                'stake_amount': value_bet.stake_amount,
+                'status': 'open'
+            }
+
+        elif sure_bet:
+            data = {
+                'fixture_id': sure_bet.fixture_id,
+                'market_id': sure_bet.market_id,
+                'outcome_id1': sure_bet.outcome_id1,
+                'outcome_id2': sure_bet.outcome_id2,
+                'timestamp': sure_bet.timestamp,
+                'soft_bookmaker1': sure_bet.soft_bookmaker1,
+                'soft_bookmaker2': sure_bet.soft_bookmaker2,
+                'soft_odds1': sure_bet.soft_odds1,
+                'soft_odds2': sure_bet.soft_odds2,
+                'possible_profit': None,
+                'guaranteed_profit': sure_bet.guaranteed_profit,
+                'profit_percentage': sure_bet.p_guaranteed_profit,
+                'stake_amount1': sure_bet.stake_amount1,
+                'stake_amount2': sure_bet.stake_amount2,
+                'status': 'closed'
+            }
 
         self.confirmed_bets.append(data)
         with open('confirmed_bets.json', 'r') as f:
@@ -2577,16 +2603,21 @@ Gebruik /manueel om zelf een weddenschap te loggen.
 
                             if bet and message_id:
                                 print('OK')
-                                _type = result.get('_type')
-                                success = self._log_bet(bet=bet, type=_type)
+                                _type = result.get('type')
+
+                                success = False
+                                if _type == 'value':
+                                    success = self._log_bet(value_bet=bet)
+                                elif _type == 'sure':
+                                    success = self._log_bet(sure_bet=bet)
 
                                 if success:
                                     # Pas verwijderen nadat het opslaan gelukt is
                                     self.telegram.pending_bets.pop(message_id, None)
-
                                     self.telegram.edit_message(
                                         message_id,
                                         f"*BEVESTIGD* ✅\n\n"
+                                        f"{bet.participant1} vs {bet.participant2}\n"
                                     )
 
                                 else:
@@ -2628,29 +2659,40 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                 logger.exception(f"Loop error")
                 time.sleep(5)
 
-    def _log_bet(self, bet, type):
+    def _log_bet(self, value_bet: ValueBet=None, sure_bet: SureBet=None):
         """Write a confirmed bet to the monthly Google Sheet."""
         if self.sheets:
-            if type == 'value':
-                    d = bet.to_dict()
-                    start_date = d.get('Start wedstrijd').split(" ")[0]
-                    data = start_date.split('-')
+            if value_bet: 
+                d = value_bet.to_dict()
+                start_date = d.get('Start wedstrijd').split(" ")[0]
+                data = start_date.split('-')
 
-                    row = [d.get(h, '') for h in SHEET_HEADERS]
-                    sheet_name = self.sheets.get_or_create_monthly_sheet(year=data[0], month=data[1])
-                    if self.sheets.append_row(row, sheet_name=sheet_name):
-                        self._save_confirmed(bet)
-                        logger.info(f"Bet opgeslagen: {bet.fixture_id}")
-                        return True
-                    
-                    else:
-                        logger.info(f"Bet niet kunnen opslaan: {bet.fixture_id}")
-                        return False
+                row = [d.get(h, '') for h in SHEET_HEADERS]
+                sheet_name = self.sheets.get_or_create_monthly_sheet(year=data[0], month=data[1])
+                if self.sheets.append_row(row, sheet_name=sheet_name):
+                    self._save_confirmed(value_bet)
+                    logger.info(f"Bet opgeslagen: {value_bet.fixture_id}")
+                    return True
                 
-            elif type == 'sure':
-                print('Logging SURE BET')
+                else:
+                    logger.info(f"Bet niet kunnen opslaan: {value_bet.fixture_id}")
+                    return False
+                
+            elif sure_bet:
+                d = sure_bet.to_dict()
+                start_date = d.get('Start wedstrijd').split(" ")[0]
+                data = start_date.split('-')
 
-
+                row = [d.get(h, '') for h in SHEET_HEADERS]
+                sheet_name = self.sheets.get_or_create_monthly_sheet(year=data[0], month=data[1])
+                if self.sheets.append_row(row, sheet_name=sheet_name):
+                    self._save_confirmed(sure_bet)
+                    logger.info(f"Bet opgeslagen: {sure_bet.fixture_id}")
+                    return True
+                
+                else:
+                    logger.info(f"Bet niet kunnen opslaan: {sure_bet.fixture_id}")
+                    return False
 
 
 def load_config(path: str = 'config.json') -> Dict:
