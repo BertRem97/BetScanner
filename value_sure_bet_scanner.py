@@ -162,7 +162,7 @@ class SureBet:
             'Stake Amount': f"{self.outcome1}: {round(self.stake_amount1, 2)}" + \
                 f"\n{self.outcome2}: {round(self.stake_amount2, 2)}" if self.outcome2 is not None else "",
             'Betslip': self.betslip_url or '',
-            'Gegarandeerde winst': round(self.guaranteed_profit, 2)
+            'Mogelijke winst': round(self.guaranteed_profit, 2)
         }
 
 @dataclass
@@ -1584,27 +1584,51 @@ class TelegramBot:
         return '\n'.join(lines)
 
     def send_value_bet_notification(self, value_bet: ValueBet=None, sure_bet: SureBet=None) -> bool:
-        odds_table = self._format_odds_table(
-            value_bet.soft_bookmaker_odds, value_bet.soft_bookmaker, value_bet.sharp_odds
-        )
 
         if sure_bet:
+            betslip_line = ""
+
+            if sure_bet.betslip_url_book1:
+                betslip_line += (
+                    f"[Betslip {sure_bet.outcome1}]"
+                    f"({sure_bet.betslip_url_book1})\n"
+                )
+
+            if sure_bet.betslip_url_book2:
+                betslip_line += (
+                    f"[Betslip {sure_bet.outcome2}]"
+                    f"({sure_bet.betslip_url_book2})"
+                )
+            print("OUTCOME2", sure_bet.outcome2)
+
             message = (
-                f"*Sure Bet Gevonden!*\n\n"
+                f"💰*Sure Bet Gevonden!*\n\n"
                 f"*{sure_bet.participant1}* vs *{sure_bet.participant2}*\n\n"
                 f"Start: {sure_bet.start_time}\n"
                 f"Competitie: {sure_bet.tournament_name} ({sure_bet.category_name})\n\n"
                 f"Sport: {sure_bet.sport}\n"
-                f"Markt: {sure_bet.market}\n"
-                f"Uitkomst: *{sure_bet.outcome}*\n\n"
-                f"*Inzet: €{sure_bet.stake_amount:.2f}*\n"
+                f"Markt: {sure_bet.market}\n\n"
+                f"*Uitkomst*: *{sure_bet.outcome1}* @ *{sure_bet.soft_odds1}*\n"
+                f"💵 *Inzet: €{sure_bet.stake_amount1:.2f} @ "
+                f"{sure_bet.soft_bookmaker1}*\n\n"
+            )
+
+            if sure_bet.outcome2:
+                message += (
+                    f"*Uitkomst*: *{sure_bet.outcome2}* @ *{sure_bet.soft_odds2}*\n"
+                    f"💵 *Inzet: €{sure_bet.stake_amount2:.2f} @ "
+                    f"{sure_bet.soft_bookmaker2}*\n\n"
+                )
+
+            message += (
                 f"Verzekerde winst: €{sure_bet.guaranteed_profit:.2f}\n"
                 f"{betslip_line}"
             )
         
             keyboard = {
                 "inline_keyboard": [[
-                    {"text": "Bevestigen", "callback_data": f"confirm_{sure_bet.fixture_id}_{sure_bet.soft_bookmaker}_{sure_bet.outcome_id}"},
+                    {"text": "Bevestigen", "callback_data":
+                      f"confirm_{sure_bet.fixture_id}_{sure_bet.soft_bookmaker1}_{sure_bet.outcome_id1}-sure"},
                     {"text": "Afwijzen",   "callback_data": f"reject_{sure_bet.fixture_id}"}
                 ]]
             }
@@ -1618,10 +1642,13 @@ class TelegramBot:
 
 
         elif value_bet:
-            betslip_line = f"[Betslip]({value_bet.betslip_url})" if value_bet.betslip_url else "_geen betslip URL_"
+            odds_table = self._format_odds_table(
+                    value_bet.soft_bookmaker_odds, value_bet.soft_bookmaker, value_bet.sharp_odds
+                    )
+            betslip_line = f"[Betslip]({value_bet.betslip_url})" if value_bet.betslip_url else ""
 
             message = (
-                f"*Value Bet Gevonden!*\n\n"
+                f"💎*Value Bet Gevonden!*\n\n"
                 f"*{value_bet.participant1}* vs *{value_bet.participant2}*\n\n"
                 f"Start: {value_bet.start_time}\n"
                 f"Competitie: {value_bet.tournament_name} ({value_bet.category_name})\n\n"
@@ -1632,7 +1659,7 @@ class TelegramBot:
                 f"{odds_table}\n\n"
                 f"*EV: {value_bet.ev_percentage:.2f}%*\n"
                 f"Win kans: {value_bet.win_probability:.1%}\n\n"
-                f"*Inzet: €{value_bet.stake_amount:.2f}*\n"
+                f"💵*Inzet: €{value_bet.stake_amount:.2f}*\n"
                 f"Mogelijke winst: €{value_bet.possible_profit:.2f}\n"
                 f"(Kelly: {value_bet.kelly_fraction:.2%} van {value_bet.bankroll:.0f})\n\n"
                 f"{betslip_line}"
@@ -1640,7 +1667,8 @@ class TelegramBot:
 
             keyboard = {
                 "inline_keyboard": [[
-                    {"text": "Bevestigen", "callback_data": f"confirm_{value_bet.fixture_id}_{value_bet.soft_bookmaker}_{value_bet.outcome_id}"},
+                    {"text": "Bevestigen", "callback_data":
+                      f"confirm_{value_bet.fixture_id}_{value_bet.soft_bookmaker}_{value_bet.outcome_id}-value", 'bet_type':'value'},
                     {"text": "Afwijzen",   "callback_data": f"reject_{value_bet.fixture_id}"}
                 ]]
             }
@@ -1749,11 +1777,17 @@ class TelegramBot:
         data = callback.get('data', '')
         message_id = callback['message'].get('message_id')
 
+        try:
+            _, _type = data.split('-')
+
+        except:
+            pass
+
         self.answer_callback(callback_id)
 
         if data.startswith('confirm_') and message_id in self.pending_bets:
             bet = self.pending_bets[message_id]
-            return {'action': 'confirm', 'bet': bet, 'message_id': message_id}
+            return {'action': 'confirm', 'bet': bet, 'message_id': message_id, 'type': _type}
 
         if data.startswith('reject_') and message_id in self.pending_bets:
             bet = self.pending_bets.pop(message_id)
@@ -2375,7 +2409,8 @@ class ValueBetScanner:
         if not sport_ids:
             raise ValueError("No sport id's configured")
 
-        counter = 0
+        seen_value_bet_keys = set()
+        seen_sure_bet_keys = set()
         value_bets = []
         sure_bets = []  
         for id in sport_ids:
@@ -2423,59 +2458,79 @@ class ValueBetScanner:
                     if not odds_data.get('bookmakerOdds'):
                         continue
 
-                    valueBets, sure_bets = self.calculator.analyze_fixture(fixture, odds_data, bankroll)
+                    valueBets, sureBets = self.calculator.analyze_fixture(fixture, odds_data, bankroll)
                     if sure_bets:
-                        print("SURE BET")
-                        pprint(sure_bets)
+                        for bet in sureBets:
+                            key = (
+                                bet.fixture_id,
+                                bet.market_id,
+                                bet.outcome_id1,
+                                bet.outcome_id2,
+                            )
 
-                   
-                    for bet in valueBets:
-                        key = f"{bet.fixture_id}_{bet.outcome_id}"
-                        
-                        if key not in self.confirmed_bet_keys:
-                            value_bets.append(bet)
+                            if key not in seen_sure_bet_keys:
+                                sure_bets.append(bet)
+                                seen_sure_bet_keys.add(key)
 
-                    time.sleep(self.config.get('request_delay', 1))
+                            print("SURE BET")
+                            pprint(sure_bets)
+                         
+
+                    if valueBets:
+                        for bet in valueBets:
+                            key = f"{bet.fixture_id}_{bet.outcome_id}"
+                            
+                            if key not in self.confirmed_bet_keys and \
+                                key not in seen_value_bet_keys:
+                                seen_value_bet_keys.add(key)
+                                value_bets.append(bet)
+
+                        time.sleep(self.config.get('request_delay', 1))
 
 
-            counter += len(value_bets)
-
-            finished_msg = f"{counter} value bets gevonden"
+            finished_msg = f"{len(value_bets)} value bets gevonden"
             finished_msg_sure = f"{len(sure_bets)} sure bets gevonden"
+
             logger.info(f"\nFound {len(value_bets)} value bets for sport ID {id}")
             logger.info(f"\nFound {len(sure_bets)} sure bets for sport ID {id}")
 
             self.is_scanning = True
 
-            value_bets.sort(
-                key=lambda bet: bet.ev_percentage,
-                reverse=True
-            )
+            if value_bets:
+                print('TOTAL VALUE BETS')
+                print(value_bets)
+                print('--------------------------------------')
+                value_bets.sort(
+                    key=lambda bet: bet.ev_percentage,
+                    reverse=True
+                )
 
-            print('TOTAL SURE BETS')
-            print(sure_bets)
-            print('-------------')
-            print('TOTAL VALUE BETS')
-            print(value_bets)
+                for bet in value_bets:
+                    if not self.is_scanning:
+                        break
+    
+                    if self.telegram:
+                        self.telegram.send_value_bet_notification(value_bet=bet)
+    
+                value_bets.clear()
 
-            for bet in sure_bets:
-                if not self.is_scanning:
-                    break
+            if sure_bets:
+                print('TOTAL SURE BETS')
+                print(sure_bets)
+                sure_bets.sort(
+                    key=lambda bet: bet.guaranteed_profit,
+                    reverse=True
+                )
 
-                if self.telegram:
-                    self.telegram.send_value_bet_notification(sure_bet=bet)
+                for bet in sure_bets:
+                    if not self.is_scanning:
+                        break
 
-                
-            for bet in value_bets:
-                if not self.is_scanning:
-                    break
+                    if self.telegram:
+                        self.telegram.send_value_bet_notification(sure_bet=bet)
 
-                if self.telegram:
-                    self.telegram.send_value_bet_notification(bet)
-
-            value_bets.clear()
-            
-       
+                sure_bets.clear()     
+    
         self.telegram.send_message("Scanner *KLAAR*") 
         self.telegram.send_message(finished_msg_sure)
         self.telegram.send_message(finished_msg)     
@@ -2534,7 +2589,8 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                             message_id = result.get('message_id')
 
                             if bet and message_id:
-                                success = self._log_bet(bet)
+                                _type = result.get('_type')
+                                success = self._log_bet(bet=bet, type=_type)
 
                                 if success:
                                     # Pas verwijderen nadat het opslaan gelukt is
@@ -2589,37 +2645,29 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                 logger.exception(f"Loop error")
                 time.sleep(5)
 
-    def _log_bet(self, bet: ValueBet):
+    def _log_bet(self, bet, type):
         """Write a confirmed bet to the monthly Google Sheet."""
         if self.sheets:
-            d = bet.to_dict()
-            start_date = d.get('Start wedstrijd').split(" ")[0]
-            data = start_date.split('-')
+            if type == 'value':
+                    d = bet.to_dict()
+                    start_date = d.get('Start wedstrijd').split(" ")[0]
+                    data = start_date.split('-')
 
-            row = [d.get(h, '') for h in SHEET_HEADERS]
-            sheet_name = self.sheets.get_or_create_monthly_sheet(year=data[0], month=data[1])
-            if self.sheets.append_row(row, sheet_name=sheet_name):
-                self._save_confirmed(bet)
-                logger.info(f"Bet opgeslagen: {bet.fixture_id}")
-                return True
-            
-            else:
-                logger.info(f"Bet niet kunnen opslaan: {bet.fixture_id}")
-                return False
+                    row = [d.get(h, '') for h in SHEET_HEADERS]
+                    sheet_name = self.sheets.get_or_create_monthly_sheet(year=data[0], month=data[1])
+                    if self.sheets.append_row(row, sheet_name=sheet_name):
+                        self._save_confirmed(bet)
+                        logger.info(f"Bet opgeslagen: {bet.fixture_id}")
+                        return True
+                    
+                    else:
+                        logger.info(f"Bet niet kunnen opslaan: {bet.fixture_id}")
+                        return False
+                
+            elif type == 'sure':
+                print('Logging SURE BET')
 
 
-    def run_single(self):
-        bets = self.scan_once()
-        logger.info(f"\n{'='*50}\nGEVONDEN {len(bets)} VALUE BETS\n{'='*50}")
-        for bet in bets:
-            logger.info(
-                f"\n{bet.participant1} vs {bet.participant2}\n"
-                f"{bet.soft_bookmaker} @ {bet.soft_odds}\n"
-                f"EV: {bet.ev_percentage:.2f}%\n"
-                f"Inzet: {bet.stake_amount:.2f}\n"
-                f"Betslip: {bet.betslip_url}"
-            )
-            self._log_bet(bet)
 
 
 def load_config(path: str = 'config.json') -> Dict:

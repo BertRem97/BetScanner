@@ -275,7 +275,12 @@
   "4a078eb5-5baa-46be-8af7-e46c8bf75964", "ec2e3cbe-3385-44fc-9a36-ea83fb9af81a", "8eda4f70-ea6b-431a-9480-cb11e48b3a3c",
   "ead935f3-8f28-4c6d-bb62-64aa361dcd92", "e40115c6-b7ac-41c3-9cde-3e9cde01aed3", "26256a5a-2e0b-455a-94d6-28827d5d7c33",
   "3e1524b5-2cb4-41ef-9c3f-b29e7c9cf642", "bcd591ff-711b-439e-a58e-8ccd8ee2694a", "31b681a1-0ef8-4e14-96e3-20c4991dfbc3",
-  "ecc7030b-87e3-4940-abac-788fdc77bf8f", "b1adface-95f9-4440-8182-fcd899be6736"
+  "ecc7030b-87e3-4940-abac-788fdc77bf8f", "b1adface-95f9-4440-8182-fcd899be6736", "35be6497-a769-4a3c-9f80-b022b4452f32",
+  "984eb39c-44ab-426b-a511-92e3773b32fc", "2e6bbe5f-e5ff-4c5e-b59f-804232280df0", "da177453-9110-4b99-aec1-66b7161bc1db",
+  "a6764d91-e42a-4602-a96d-b6cf01fcb54c", "d6224d62-0765-4167-a5d1-a386c71184cd", "3d964bb7-f7e2-43f0-999a-c17e95a69e87",
+  "fe803fbd-46c2-411c-b737-2fda29f98513", "d57077f7-25ab-4f8d-b815-b5fbe20bc66e", "56b759de-b830-4fd6-b7f2-51e97e55a141",
+  "aa8a17e5-011d-4e03-8c35-b40b0a983987", "8d8f5c28-0c2b-4c01-abfd-837c17a79475", "3240abe1-0516-407a-932d-2cd81fb43cdc",
+  "25f74348-5b35-473c-9d26-d19091c54316", "cf3d0b7b-1fe6-47ca-bb2d-9fd94b390930", "56b2b977-046c-47b1-8780-752191b79a20"
   
 
   ],
@@ -293,8 +298,8 @@
   "kelly_fraction": 0.10,
   "bankroll": 1000,
   "sport_id": [10, 12, 11, 14],
-  "max_tournaments": 20,
-  "days_ahead": 7,
+  "max_tournaments": 50,
+  "days_ahead": 14,
   "request_delay": 1.0,
   "scan_interval": 300,
   "vpn": {
