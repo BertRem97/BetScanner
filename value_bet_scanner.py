@@ -231,7 +231,6 @@ class OddsPapiClient:
             if error:
                 if response.status_code == 429:
                     if error.get("message") == "Request limit exceeded":
-                        logger.info(f"API KEY {api_key} drained removing from list")
                         self.api_keys.remove(api_key)
                         return self._make_request(endpoint, params)
 

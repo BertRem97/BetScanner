@@ -227,7 +227,7 @@
   "d5003946-7ceb-4d1e-8824-9f4b0f63b0d8", "f61edd2c-61cf-4287-b18f-ff2a93f2e846",
   "af37d831-b020-4a42-8e3b-f0f162fe36ae", "b34b0460-8a88-4ef9-864b-0052e5b628c2",
   "bfb9a9c8-5d16-4024-a81b-7b27ec18adc0", "d6b8d680-75ca-4706-a7db-cc6e7d67cc75",
-  "789df181-5026-4028-adb7-78ea6ace4dab",
+  "789df181-5026-4028-adb7-78ea6ace4dab", 
     
     
   "04d13ee7-6374-4053-a880-a7034bcae2bf", "21558a0c-5ace-4c29-94fc-223382414d9c",
@@ -265,7 +265,17 @@
   "d90988bd-c620-40a2-9acb-dae08ece07a5", "70f0548e-d020-4a49-a6c2-6940c8b56a9c", "839b02b2-83f1-41fc-b26a-72f20e9da6aa",
   "c7180755-627d-4808-a948-1873385f548d", "cc343b17-8c9d-43a7-bb54-a4cb082fa7c7", "34c7e4dc-ffae-4641-b562-26234b79b011",
   "44ab28c5-ad4f-41da-bfbf-754dfd2ffe74", "6b0e8154-d352-46f8-9085-1caee4eaaa11", "14d0ad93-06be-4600-83d4-2c0a3b7ab371",
-  "8e30c335-288e-410d-b43b-4b79a613665a", "b503ab36-3e3f-4198-a6bf-a94bc642072b"
+  "8e30c335-288e-410d-b43b-4b79a613665a", "b503ab36-3e3f-4198-a6bf-a94bc642072b", "8e04e19f-3bf1-4490-b06b-e956b89af275",
+  "e58a4302-5376-47a8-9b6b-b481eb2adee1", "922f0966-c7ed-4c88-bbec-d1c9262aa45f", "54587e4d-2f52-45cb-8b0b-85589a19de2a",
+  "2ac29d90-2afd-4543-8b7f-9c7dfefda275", "406007b2-a7d6-4116-adce-a4500594d2f6", "83290e7f-3353-492f-af2e-4d40431d3188",
+  "aea63965-86b3-4c6a-98eb-c7aa445bff8e", "72cb0ca6-1ae0-4af1-bb81-6fb8350cc92c", "6288a47f-fc0f-46f7-8f62-421ce12d0d1e",
+  "7cf94273-2e2f-4203-990d-8811672a09d9", "846dbef6-1032-42a4-9507-27bfb9457467", "15030621-49ff-4e21-9601-b00cf3ec5e14",
+  "4e46a3d9-96ea-42d9-843b-f542152cee52", "0a2c5f31-4e8d-4e7c-bcca-b07644183fb7", "36516d3b-7aa3-46d1-a3fa-707c8254b574",
+  "3e3897db-706c-4608-b4de-2129213e171a", "e7bb1311-cedd-47bb-920d-bf7d1093b9cb", "a7feb7e2-007c-4a14-853c-0c0ba8e9bf1a",
+  "4a078eb5-5baa-46be-8af7-e46c8bf75964", "ec2e3cbe-3385-44fc-9a36-ea83fb9af81a", "8eda4f70-ea6b-431a-9480-cb11e48b3a3c",
+  "ead935f3-8f28-4c6d-bb62-64aa361dcd92", "e40115c6-b7ac-41c3-9cde-3e9cde01aed3", "26256a5a-2e0b-455a-94d6-28827d5d7c33",
+  "3e1524b5-2cb4-41ef-9c3f-b29e7c9cf642", "bcd591ff-711b-439e-a58e-8ccd8ee2694a", "31b681a1-0ef8-4e14-96e3-20c4991dfbc3",
+  "ecc7030b-87e3-4940-abac-788fdc77bf8f", "b1adface-95f9-4440-8182-fcd899be6736"
   
 
   ],
@@ -278,12 +288,13 @@
   "google_credentials_path": "credentials.json",
   "google_spreadsheet_id": "1Q2ALPTkGx8SICor1c4cDjZWI5Ewg_OKugvr0yUNY_WQ",
   "min_ev_threshold": 20,
+  "total_stake_surebet": 50,
   "min_win_probability": 10,
   "kelly_fraction": 0.10,
   "bankroll": 1000,
   "sport_id": [10, 12, 11, 14],
-  "max_tournaments": 50,
-  "days_ahead": 10,
+  "max_tournaments": 20,
+  "days_ahead": 7,
   "request_delay": 1.0,
   "scan_interval": 300,
   "vpn": {
