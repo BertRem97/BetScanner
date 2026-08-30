@@ -1622,7 +1622,7 @@ class TelegramBot:
                 )
 
             message += (
-                f"Totale inzet: €{int(sure_bet.stake_amount1 + sure_bet.stake_amount2)}\n"
+                f"Totale inzet: €{self.config.get('total_stake_surebet'), 0}\n"
                 f"💵 *Verzekerde winst*: €{sure_bet.guaranteed_profit:.2f}\n"
                 f"{betslip_line}"
             )
@@ -2488,9 +2488,6 @@ class ValueBetScanner:
             self.is_scanning = True
 
             if value_bets:
-                print('TOTAL VALUE BETS')
-                print(value_bets)
-                print('--------------------------------------')
                 value_bets.sort(
                     key=lambda bet: bet.ev_percentage,
                     reverse=True
@@ -2506,8 +2503,6 @@ class ValueBetScanner:
                 value_bets.clear()
 
             if sure_bets:
-                print('TOTAL SURE BETS')
-                print(sure_bets)
                 sure_bets.sort(
                     key=lambda bet: bet.guaranteed_profit,
                     reverse=True
@@ -2592,18 +2587,13 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                                     self.telegram.edit_message(
                                         message_id,
                                         f"*BEVESTIGD* ✅\n\n"
-                                        f"{bet.participant1} vs {bet.participant2}\n"
-                                        f"{bet.soft_bookmaker} @ {bet.soft_odds}\n"
-                                        f"Inzet: {bet.stake_amount:.2f}"
                                     )
 
                                 else:
                                     self.telegram.send_message(
                                         message_id,
                                         f"*LOGGEN MISLUKT* ❌\n\n"
-                                        f"{bet.participant1} vs {bet.participant2}\n"
-                                        f"{bet.outcome}\n\n"
-                                        f"Probeer bet opnieuw te loggen."
+                                        f"Probeer opnieuw"
                                     )
             
                                     
