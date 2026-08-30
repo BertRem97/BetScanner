@@ -159,15 +159,15 @@ class SureBet:
             'League': self.tournament_name,
             'Soft Book': f"{self.outcome1} @ {self.soft_bookmaker1} @ {self.soft_odds1}" + \
                 f"\n{self.outcome2} @ {self.soft_bookmaker2} @ {self.soft_odds2}" if self.soft_bookmaker2 is not None else "",
+            'Stake Amount': f"{self.outcome1} --> €{round(self.stake_amount1, 2)}" + \
+                        f"\n{self.outcome2} --> €{round(self.stake_amount2, 2)}" if self.outcome2 is not None else "",
+            'Total Stake': round(self.stake_amount1 + self.stake_amount2, 2),
+            'Possible profit': round(self.guaranteed_profit, 2),
             'Odds overzicht (soft)': "",
             'Sharp Ref (mediaan)': "",
             'EV %': "",
             'Win Prob': "",
-            'Stake Amount': f"{self.outcome1}: {round(self.stake_amount1, 2)}" + \
-                f"\n{self.outcome2}: {round(self.stake_amount2, 2)}" if self.outcome2 is not None else "",
-            'Kelly %': "",
             'Betslip': self.betslip_url_book1 or '',
-            'Mogelijke winst': round(self.guaranteed_profit, 2)
         }
 
 @dataclass
@@ -219,14 +219,14 @@ class ValueBet:
             'Land / Tournooi': self.category_name,
             'League': self.tournament_name,
             'Soft Book': f"{self.soft_bookmaker} @ {self.soft_odds}",
+            'Stake Amount': "",
+            'Total Stake': round(self.stake_amount, 2),
+            'Possible profit': round(self.possible_profit, 2),
             'Odds overzicht (soft)': odds_str,
             'Sharp Ref (mediaan)': round(self.sharp_odds, 4),
             'EV %': round(self.ev_percentage / 100, 4),
             'Win Prob': round(self.win_probability, 4),
-            'Stake Amount': round(self.stake_amount, 2),
-            'Kelly %': round(self.kelly_fraction, 4),
             'Betslip': self.betslip_url or '',
-            'Mogelijke winst': round(self.possible_profit, 2)
         }
 
 
@@ -2308,6 +2308,11 @@ class ValueBetScanner:
         fixture_ids = []
         for b in self.confirmed_bets:
             fixture_id = b['fixture_id']
+
+            if b['fixture_id'].startswith('manual_') \
+                or b['status'] == 'closed':
+                    continue
+
             data = self.odds_client.get_fixture(fixture_id)
             if data:
                 try:
@@ -2318,10 +2323,7 @@ class ValueBetScanner:
                 except KeyError:
                     continue
 
-            if not b['fixture_id'].startswith('manual_') \
-                    and b['status'] == 'open':
-
-                    fixture_ids.append(fixture_id)
+                fixture_ids.append(fixture_id)
 
         scores = self.odds_client.get_scores(fixture_ids)
         updated = wins = losses = 0
@@ -2670,7 +2672,7 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                 row = [d.get(h, '') for h in SHEET_HEADERS]
                 sheet_name = self.sheets.get_or_create_monthly_sheet(year=data[0], month=data[1])
                 if self.sheets.append_row(row, sheet_name=sheet_name):
-                    self._save_confirmed(value_bet)
+                    self._save_confirmed(value_bet=value_bet)
                     logger.info(f"Bet opgeslagen: {value_bet.fixture_id}")
                     return True
                 
@@ -2686,7 +2688,7 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                 row = [d.get(h, '') for h in SHEET_HEADERS]
                 sheet_name = self.sheets.get_or_create_monthly_sheet(year=data[0], month=data[1])
                 if self.sheets.append_row(row, sheet_name=sheet_name):
-                    self._save_confirmed(sure_bet)
+                    self._save_confirmed(sure_bet=sure_bet)
                     logger.info(f"Bet opgeslagen: {sure_bet.fixture_id}")
                     return True
                 
