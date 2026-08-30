@@ -696,7 +696,7 @@ class ValueBetCalculator:
                         'next_outcome': Next_outcome,
                         'best_price_current': best_price_current,
                         'best_book_next': best_book_next,
-                        'best_price_next': best_price_next,
+                        'best_price_next': best_price_next, #best_price_next
                         'logged_odds': None,
                         'possible_profit': None,
                         'logged_stake': None
@@ -716,6 +716,7 @@ class ValueBetCalculator:
                         logged_stake = bet['logged_stake']
                         current_outcome = bet['current_outcome']
                         next_outcome = bet['next_outcome']
+                     
 
 
                         perc = 1 / best_price_current + 1 / best_price_next \
@@ -745,13 +746,14 @@ class ValueBetCalculator:
 
                             betslip_url_book2 = self.odds_client.get_outcome_betslip_url(
                                                                             bookmaker_odds[best_book_next], Next_outcome, best_book_next
-                                                    )
+                                                    ) if best_price_next else None
 
                             stake1 = self.total_stake / best_price_current / (1 / best_price_current + 1 / best_price_next) \
                             if best_price_next else (logged_odds * logged_stake) / best_price_current
 
                             stake2 = self.total_stake / best_price_next / (1 / best_price_current + 1 / best_price_next) \
-                            if best_price_next else None
+                            if best_price_next else logged_stake
+
                             
                             sure_bets.append(SureBet(
                                 fixture_id=fixtureId,
@@ -1599,7 +1601,6 @@ class TelegramBot:
                     f"[Betslip {sure_bet.outcome2}]"
                     f"({sure_bet.betslip_url_book2})"
                 )
-            print("OUTCOME2", sure_bet.outcome2)
 
             message = (
                 f"💰*Sure Bet Gevonden!*\n\n"
@@ -1609,19 +1610,20 @@ class TelegramBot:
                 f"Sport: {sure_bet.sport}\n"
                 f"Markt: {sure_bet.market}\n\n"
                 f"*Uitkomst*: *{sure_bet.outcome1}* @ *{sure_bet.soft_odds1}*\n"
-                f"💵 *Inzet: €{sure_bet.stake_amount1:.2f} @ "
+                f"*Inzet: €{sure_bet.stake_amount1:.2f} @ "
                 f"{sure_bet.soft_bookmaker1}*\n\n"
             )
 
             if sure_bet.outcome2:
                 message += (
                     f"*Uitkomst*: *{sure_bet.outcome2}* @ *{sure_bet.soft_odds2}*\n"
-                    f"💵 *Inzet: €{sure_bet.stake_amount2:.2f} @ "
+                    f"*Inzet: €{sure_bet.stake_amount2:.2f} @ "
                     f"{sure_bet.soft_bookmaker2}*\n\n"
                 )
 
             message += (
-                f"Verzekerde winst: €{sure_bet.guaranteed_profit:.2f}\n"
+                f"Totale inzet: €{int(sure_bet.stake_amount1 + sure_bet.stake_amount2)}\n"
+                f"💵 *Verzekerde winst*: €{sure_bet.guaranteed_profit:.2f}\n"
                 f"{betslip_line}"
             )
         
@@ -2459,22 +2461,14 @@ class ValueBetScanner:
                         continue
 
                     valueBets, sureBets = self.calculator.analyze_fixture(fixture, odds_data, bankroll)
-                    if sure_bets:
+                    if sureBets:
                         for bet in sureBets:
-                            key = (
-                                bet.fixture_id,
-                                bet.market_id,
-                                bet.outcome_id1,
-                                bet.outcome_id2,
-                            )
+                            key = f"{bet.fixture_id}_{bet.market_id}"
 
                             if key not in seen_sure_bet_keys:
                                 sure_bets.append(bet)
                                 seen_sure_bet_keys.add(key)
 
-                            print("SURE BET")
-                            pprint(sure_bets)
-                         
 
                     if valueBets:
                         for bet in valueBets:
@@ -2487,9 +2481,6 @@ class ValueBetScanner:
 
                         time.sleep(self.config.get('request_delay', 1))
 
-
-            finished_msg = f"{len(value_bets)} value bets gevonden"
-            finished_msg_sure = f"{len(sure_bets)} sure bets gevonden"
 
             logger.info(f"\nFound {len(value_bets)} value bets for sport ID {id}")
             logger.info(f"\nFound {len(sure_bets)} sure bets for sport ID {id}")
@@ -2529,12 +2520,13 @@ class ValueBetScanner:
                     if self.telegram:
                         self.telegram.send_value_bet_notification(sure_bet=bet)
 
-                sure_bets.clear()     
-    
-        self.telegram.send_message("Scanner *KLAAR*") 
-        self.telegram.send_message(finished_msg_sure)
-        self.telegram.send_message(finished_msg)     
+                sure_bets.clear()    
 
+        finished_msg = f"{len(value_bets)} value bets gevonden"
+        finished_msg_sure = f"{len(sure_bets)} sure bets gevonden"
+        
+        self.telegram.send_message("Scanner *KLAAR*") 
+          
          
     def run_interactive(self):
         if not self.telegram:
@@ -2589,6 +2581,7 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                             message_id = result.get('message_id')
 
                             if bet and message_id:
+                                print('OK')
                                 _type = result.get('_type')
                                 success = self._log_bet(bet=bet, type=_type)
 
