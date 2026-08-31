@@ -53,9 +53,9 @@ logger = logging.getLogger(__name__)
 SHEET_HEADERS = [
     'Settlement', 'Datum', 'Start wedstrijd', 'Event fixture', 'Outcome id', 'Match',
     'Sport', 'Market', 'Outcome', 'Land / Tournooi', 'League',
-    'Soft Book', 'Odds overzicht (soft)', 'Sharp Ref (mediaan)',
-    'EV %', 'Win Prob', 'Stake Amount', 'Kelly %',
-    'Betslip', 'Mogelijke winst'
+    'Soft Book', 'Stake Amount', 'Total Stake',
+    'Possible profit', 'Odds overzicht (soft)', 'Sharp Ref (mediaan)', 'EV %',
+    'Win Prob %', 'Betslip'
 ]
 
 class ApiKeyManager:
@@ -1946,6 +1946,7 @@ Min win chance: {self.config.get('min_win_probability', "Onbekend")}
 Kelly f: {self.config.get('kelly_fraction', "Onbekend")}
 Max tournaments: {self.config.get('max_tournaments', "Onbekend")}
 Days ahead: {self.config.get('days_ahead', "Onbekend")}\n
+Stake per Sure Bet: {self.config.get('total_stake_surebet')}
 *Sports*:\n{sports}\n
 *Bookies*:
 {bookies}
@@ -2036,6 +2037,7 @@ class ValueBetScanner:
         self.seen_bets: set = set()
         self.confirmed_bets: List[Dict] = []
         self.confirmed_bet_keys = None
+        self.confirmed_sure_bet_keys = None
         self._load_seen()
 
         api_keys = config.get('oddspapi_keys', [])
@@ -2099,8 +2101,10 @@ class ValueBetScanner:
                                 f"{b['fixture_id']}_{b['outcome_id']}"
                             }
 
-                        except:
-                            continue
+                        except KeyError:
+                            self.confirmed_sure_bet_keys = {
+                                f"{b['fixture_id']}_{b['market_id']}"
+                            }
             
         except Exception:
             pass
@@ -2672,7 +2676,6 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                 data = start_date.split('-')
 
                 row = [d.get(h, '') for h in SHEET_HEADERS]
-                print(row)
                 sheet_name = self.sheets.get_or_create_monthly_sheet(year=data[0], month=data[1])
                 if self.sheets.append_row(row, sheet_name=sheet_name):
                     self._save_confirmed(value_bet=value_bet)
@@ -2689,6 +2692,7 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                 data = start_date.split('-')
 
                 row = [d.get(h, '') for h in SHEET_HEADERS]
+                print(row)
                 sheet_name = self.sheets.get_or_create_monthly_sheet(year=data[0], month=data[1])
                 if self.sheets.append_row(row, sheet_name=sheet_name):
                     self._save_confirmed(sure_bet=sure_bet)
