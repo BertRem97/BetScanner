@@ -1731,6 +1731,7 @@ class ValueBetScanner:
         self.is_scanning = False
         self.settlements = []
         self._market_mapping = []
+        self.confirmed_bet_keys = None
 
         api_keys = config.get('oddspapi_keys', [])
         if not api_keys:
@@ -1792,6 +1793,8 @@ class ValueBetScanner:
                     for b in self.confirmed_bets
                 
                 }
+
+                print(self.confirmed_bet_keys)
             
             
         except Exception:

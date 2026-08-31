@@ -140,7 +140,6 @@ class SureBet:
     settelement_status = "WIN"
 
 
-
     def to_dict(self) -> Dict:
 
         return {
@@ -2036,6 +2035,7 @@ class ValueBetScanner:
         self._market_mapping = []
         self.seen_bets: set = set()
         self.confirmed_bets: List[Dict] = []
+        self.confirmed_bet_keys = None
         self._load_seen()
 
         api_keys = config.get('oddspapi_keys', [])
@@ -2093,12 +2093,14 @@ class ValueBetScanner:
                 with open('confirmed_bets.json') as f:
                     self.confirmed_bets = json.load(f)
 
-                self.confirmed_bet_keys = {
-                    f"{b['fixture_id']}_{b['outcome_id']}"
-                    for b in self.confirmed_bets
-                
-                }
-            
+                    for b in self.confirmed_bets:
+                        try:
+                            self.confirmed_bet_keys = {
+                                f"{b['fixture_id']}_{b['outcome_id']}"
+                            }
+
+                        except:
+                            continue
             
         except Exception:
             pass
@@ -2670,6 +2672,7 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                 data = start_date.split('-')
 
                 row = [d.get(h, '') for h in SHEET_HEADERS]
+                print(row)
                 sheet_name = self.sheets.get_or_create_monthly_sheet(year=data[0], month=data[1])
                 if self.sheets.append_row(row, sheet_name=sheet_name):
                     self._save_confirmed(value_bet=value_bet)

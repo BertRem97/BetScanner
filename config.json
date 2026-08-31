@@ -283,7 +283,11 @@
   "25f74348-5b35-473c-9d26-d19091c54316", "cf3d0b7b-1fe6-47ca-bb2d-9fd94b390930", "56b2b977-046c-47b1-8780-752191b79a20",
   "d013380a-5eae-49d6-a8e4-2bac60332988", "e40469ec-72bd-4c02-b7dd-eb3bebc259ef", "5896a0ef-48c9-4ffc-a382-c6b47bcef5af",
   "c3c5875f-b437-44c6-9b08-4ea9a232d513", "1ff8d71f-4a63-42a1-9a69-cb6b156348a6", "bb4643db-9d50-4e8a-8f85-1bddd391830b",
-  "7fe864ed-d91e-4f23-b9b4-7c1efa8c0ff9"
+  "7fe864ed-d91e-4f23-b9b4-7c1efa8c0ff9", "fb9f4743-bd80-47af-b2c2-2172049f84dc", "55a8d760-7252-465c-850c-570d61935ea9",
+  "6429e708-dc25-43c0-8af9-a4637cc1f930", "f111cc6b-18ff-4f1f-9030-b34546f5c245", "f111cc6b-18ff-4f1f-9030-b34546f5c245",
+  "31542d59-f955-4e87-aa1d-2001ba6022ea", "a106e1ff-cb98-4f38-b700-bbb2dc3a448b", "e4ccd73d-2065-4c9d-b222-5cbb942f6ecd",
+  "38045ac5-a0b0-45df-9f2b-727e40d06880", "2563a22a-4371-40c8-b37f-5f4fe7d376ec", "214cd3ca-506b-434f-9b45-b70295cbd82f",
+  "88f7ba45-4d70-4fb2-badd-3184dbf86b11"
   
 
   ],
@@ -292,11 +296,12 @@
   "requests_per_key": 250,
   "telegram_bot_token": "8637867779:AAGQq9jN_IbZkHqdkyMIbFc9GgXxufoJxb0",
   "telegram_chat_id": "6980285678",
+  "telegram_sure_bet_id": "-1004348581620",
   "performance_chat_id": "-1003904348025",
   "google_credentials_path": "credentials.json",
   "google_spreadsheet_id": "1Q2ALPTkGx8SICor1c4cDjZWI5Ewg_OKugvr0yUNY_WQ",
   "min_ev_threshold": 20,
-  "total_stake_surebet": 50,
+  "total_stake_surebet": 20,
   "min_win_probability": 15,
   "kelly_fraction": 0.10,
   "bankroll": 1000,
