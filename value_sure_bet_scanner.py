@@ -69,16 +69,34 @@ class ApiKeyManager:
         self.key_errors = {key: 0 for key in self.api_keys}
         self.total_requests = 0
         self._lock = threading.Lock()
-    
+
+    def remove_key(self, api_key: str):
+        with self._lock:
+            if api_key in self.api_keys:
+                self.api_keys.remove(api_key)
+
+            self.key_usage.pop(api_key, None)
+            self.key_errors.pop(api_key, None)
+
+            if self.api_keys:
+                self.current_index %= len(self.api_keys)
+            else:
+                self.current_index = 0
 
     def get_next_key(self) -> str:
+        if not self.api_keys:
+            raise RuntimeError("No Oddspapi keys available")
+
         with self._lock:
-            for _ in range(len(self.api_keys)):
-                key = self.api_keys[self.current_index]
-                self.current_index = (self.current_index + 1) % len(self.api_keys)
-                if self.key_usage[key] < self.requests_per_key:
-                    return key
-            return min(self.api_keys, key=lambda k: self.key_errors[k])
+            self.current_index %= len(self.api_keys)
+
+            key = self.api_keys[self.current_index]
+
+            self.current_index = (
+                self.current_index + 1
+            ) % len(self.api_keys)
+
+            return key
 
     def record_request(self, api_key: str):
         with self._lock:
@@ -237,7 +255,7 @@ class OddsPapiClient:
 
     SOFT_BOOKMAKERS = [
         'cashpoint', 'unibet.be', 'betano', 'goldenpalacesports.be',
-        'bwin.be', 'napoleonsports.be', 'bet365', 'bcgame'
+        'bwin.be', 'napoleonsports.be', 'bcgame'
 
         #ladbrokes.be
         #betcenter.be, 
@@ -246,6 +264,7 @@ class OddsPapiClient:
         #goldenpalacesports.be, 
         #starcasino.be -> starsport.be
         #cashpoint.be --> betcenter.be
+        #bet365
     ]
 
     # Sharp books used only for median reference, NOT as bet targets
@@ -287,13 +306,13 @@ class OddsPapiClient:
                 timeout=(10, 60)
             )
 
-    
             error = response.json().get("error", None)
 
             if error:
                 if response.status_code == 429:
                     if error.get("message") == "Request limit exceeded":
                         self.api_keys.remove(api_key)
+                        logger.info(f"API KEY {api_key} drained, trying next one")
                         return self._make_request(endpoint, params)
                 
 
@@ -324,7 +343,6 @@ class OddsPapiClient:
             
     
 
-
     def get_sports(self) -> List[Dict]:
         try:
             response = self._make_request("sports")
@@ -335,32 +353,41 @@ class OddsPapiClient:
         except Exception as e:
             logger.error(f"Error fetching sports: {e}")
             return []
+        
 
     def get_tournaments(self, sport_id: int = 10) -> List[Dict]:
-        try:
 
-            response = self._make_request("tournaments", {'sportId': sport_id})
+        max_retries = 10000
 
-            if response is None:
-                return None
-            response.raise_for_status()
-            return response.json()
-        
-        except requests.exceptions.ConnectionError as e:
-            logger.warning(
-                f"Connection reset {e}"
-            )
-            time.sleep(3)
-            return self.get_tournaments(sport_id)
+        for attempt in range(max_retries):
 
-        except requests.exceptions.ReadTimeout:
-            logger.warning("Oddspapi timeout, retrying...")
-            time.sleep(5)
-            return self.get_tournaments(sport_id)
+            try:
+                response = self._make_request(
+                    "tournaments",
+                    {'sportId': sport_id}
+                )
 
-        except Exception as e:
-            logger.error(f"Error fetching tournaments, retrying: {e}")
-            return self.get_tournaments(sport_id)
+                if response is None:
+                    return []
+
+                response.raise_for_status()
+                return response.json()
+
+            except requests.exceptions.ConnectionError as e:
+                time.sleep(3)
+
+            except requests.exceptions.ReadTimeout:
+                time.sleep(5)
+
+            except Exception as e:
+                time.sleep(1)
+
+        logger.error(
+            f"Failed to fetch tournaments for sport {sport_id} "
+            f"after {max_retries} attempts"
+        )
+
+        return []
 
     def get_markets(self):
         response = self._make_request("markets")
@@ -727,7 +754,7 @@ class ValueBetCalculator:
                         if best_price_next else 1 / logged_odds + 1 / best_price_current
         
                         if perc < 1:
-                            perc_profit = (1 /  perc - 1) * 100
+                            perc_profit = (1 /  perc - 1)
                            
 
                             market_info = sport_markets.get(market_id)
@@ -1255,12 +1282,17 @@ class GoogleSheetsManager:
             return self.get_all_rows(sheet_range)
 
     def update_cell(self, row: int, col: int, value: str,
-                    sheet_name: str = None) -> bool:
+                    sheet_name: str = None, start_time=None) -> bool:
 
         if not self.available:
             return False
         if sheet_name is None:
-            sheet_name = self.get_or_create_monthly_sheet()
+            if start_time is not None:
+                year, month = start_time.split('-')
+                sheet_name = self.get_or_create_monthly_sheet(year=year, month=month)
+            else: 
+                sheet_name = self.get_or_create_monthly_sheet()
+
         try:
             col_letter = chr(65 + col)
             self.service.spreadsheets().values().update(
@@ -1344,7 +1376,7 @@ class GoogleSheetsManager:
         return 500
 
     def update_settlement(self, fixture_id: str, settlement: str, outcome_id: str,
-                        sheet_name: str = None) -> bool:
+                        sheet_name: str = None, start_time=None) -> bool:
 
         rows = self.get_all_rows(sheet_name)
         header_row = 10  # rij 11 in Sheets
@@ -1379,7 +1411,8 @@ class GoogleSheetsManager:
                         i + 1,
                         settlement_col,
                         settlement,
-                        sheet_name
+                        sheet_name,
+                        start_time=start_time
                     )
 
         return False
@@ -1607,7 +1640,7 @@ class TelegramBot:
                 )
 
             message = (
-                f"💰*Sure Bet Gevonden!*\n\n"
+                f"💰 *Sure Bet Gevonden!*\n\n"
                 f"*{sure_bet.participant1}* vs *{sure_bet.participant2}*\n\n"
                 f"Start: {sure_bet.start_time}\n"
                 f"Competitie: {sure_bet.tournament_name} ({sure_bet.category_name})\n\n"
@@ -1626,8 +1659,9 @@ class TelegramBot:
                 )
 
             message += (
-                f"Totale inzet: €{self.config.get('total_stake_surebet', 0)}\n"
-                f"💵 *Verzekerde winst*: €{sure_bet.guaranteed_profit:.2f}\n"
+                f"💵 *Totale inzet*: €{self.config.get('total_stake_surebet', 0)}\n"
+                f"*Verzekerde winst*: €{sure_bet.guaranteed_profit:.2f}\n"
+                f"*Winst percentage*: {sure_bet.p_guaranteed_profit:.2%}\n"
                 f"{betslip_line}"
             )
         
@@ -1654,7 +1688,7 @@ class TelegramBot:
             betslip_line = f"[Betslip]({value_bet.betslip_url})" if value_bet.betslip_url else ""
 
             message = (
-                f"💎*Value Bet Gevonden!*\n\n"
+                f"💎 *Value Bet Gevonden!*\n\n"
                 f"*{value_bet.participant1}* vs *{value_bet.participant2}*\n\n"
                 f"Start: {value_bet.start_time}\n"
                 f"Competitie: {value_bet.tournament_name} ({value_bet.category_name})\n\n"
@@ -2021,6 +2055,7 @@ Profit: €{total_profit:.2f}
             "/current - Winst/verlies overzicht\n"
             "/overiew - Toon totaaloverzicht\n"
             "/set - Settlements bijwerken\n"
+            "/show_config - Instellingen bekijken"
             "/help - Dit overzicht"
         )
         return {'action': 'help'}
@@ -2036,8 +2071,8 @@ class ValueBetScanner:
         self._market_mapping = []
         self.seen_bets: set = set()
         self.confirmed_bets: List[Dict] = []
-        self.confirmed_bet_keys = None
-        self.confirmed_sure_bet_keys = None
+        self.confirmed_bet_keys = set()
+        self.confirmed_sure_bet_keys = set()
         self._load_seen()
 
         api_keys = config.get('oddspapi_keys', [])
@@ -2095,17 +2130,19 @@ class ValueBetScanner:
                 with open('confirmed_bets.json') as f:
                     self.confirmed_bets = json.load(f)
 
-                    for b in self.confirmed_bets:
+                for b in self.confirmed_bets:
+                    try:
+                        self.confirmed_bet_keys.add(
+                            f"{b['fixture_id']}_{b['outcome_id']}"
+                        )
+                    except KeyError:
                         try:
-                            self.confirmed_bet_keys = {
-                                f"{b['fixture_id']}_{b['outcome_id']}"
-                            }
-
-                        except KeyError:
-                            self.confirmed_sure_bet_keys = {
+                            self.confirmed_sure_bet_keys.add(
                                 f"{b['fixture_id']}_{b['market_id']}"
-                            }
-            
+                            )
+                        except KeyError:
+                            continue
+        
         except Exception:
             pass
 
@@ -2114,9 +2151,10 @@ class ValueBetScanner:
 
     def _save_confirmed(self, value_bet: ValueBet=None, sure_bet: SureBet=None):
         if value_bet:
-            data = {
+            bet = {
                 'fixture_id': value_bet.fixture_id,
                 'market_id': value_bet.market_id,
+                'start': value_bet.start_time,
                 'outcome_id': value_bet.outcome_id,
                 'timestamp': value_bet.timestamp,
                 'soft_bookmaker': value_bet.soft_bookmaker,
@@ -2127,7 +2165,7 @@ class ValueBetScanner:
             }
 
         elif sure_bet:
-            data = {
+            bet = {
                 'fixture_id': sure_bet.fixture_id,
                 'market_id': sure_bet.market_id,
                 'outcome_id1': sure_bet.outcome_id1,
@@ -2145,11 +2183,12 @@ class ValueBetScanner:
                 'status': 'closed'
             }
 
-        self.confirmed_bets.append(data)
+        self.confirmed_bets.append(bet)
         with open('confirmed_bets.json', 'r') as f:
-            bets = json.load(f)
-        
-        bets.append(data)
+             data = json.load(f)
+
+        bets = [b for b in data if b['status'] != 'closed']
+        bets.append(bet)
 
         with open('confirmed_bets.json', 'w') as f:
             json.dump(bets, f, indent=2)
@@ -2347,6 +2386,12 @@ class ValueBetScanner:
                         continue
 
                     outcome_id = bet['outcome_id']
+                    try:
+                        start_time = bet.get('start_time')
+
+                    except:
+                        pass
+
                     #possible_profit = bet.get('possible_profit', None)
                     #potential_loss = bet['stake_amount']
 
@@ -2403,7 +2448,7 @@ class ValueBetScanner:
                             print("MATCH", fid, outcome_id, status)
                             print(result)
                             
-                            succes = self.sheets.update_settlement(fid, status, outcome_id)
+                            succes = self.sheets.update_settlement(fid, status, outcome_id, start_time=start_time)
                             if succes:
                                 print("Settlement Updated!")
                                 print("-----------------------------------------")
@@ -2507,7 +2552,8 @@ class ValueBetScanner:
                     if valueBets:
                         for bet in valueBets:
                             key = f"{bet.fixture_id}_{bet.outcome_id}"
-                            
+
+
                             if key not in self.confirmed_bet_keys and \
                                 key not in seen_value_bet_keys:
                                 seen_value_bet_keys.add(key)
@@ -2610,7 +2656,6 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                             message_id = result.get('message_id')
 
                             if bet and message_id:
-                                print('OK')
                                 _type = result.get('type')
 
                                 success = False
@@ -2692,7 +2737,6 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                 data = start_date.split('-')
 
                 row = [d.get(h, '') for h in SHEET_HEADERS]
-                print(row)
                 sheet_name = self.sheets.get_or_create_monthly_sheet(year=data[0], month=data[1])
                 if self.sheets.append_row(row, sheet_name=sheet_name):
                     self._save_confirmed(sure_bet=sure_bet)
@@ -2738,7 +2782,7 @@ def main():
         return
 
     if args.sport is not None:
-        config["sport_id"] = [args.sport]
+        config["sport_id"] = args.sport
       
     if args.ev is not None:
         config['min_ev_threshold'] = args.ev

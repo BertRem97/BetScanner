@@ -14,6 +14,101 @@ MARKETS = {
                     '105': 'Nee'
                 }
             },
+            '106': {
+                'Over / Onder Full Time'
+                'Handicap 0.5': {
+                    '106': 'Over',
+                    '107': 'Onder'
+                }
+            },
+            '108': {
+                'Over / Onder Full Time '
+                'Handicap 1.5': {
+                    '108': 'Over',
+                    '109': 'Onder'
+                }
+            },
+            '1010': {
+                        'Over / Onder Full Time'
+                        'Handicap 2.5': {
+                            '1010': 'Over',
+                            '1011': 'Onder'
+                    }
+            },
+            '1012': {
+                    'Over / Onder Full Time'
+                    'Handicap 3.5': {
+                        '1012': 'Over',
+                        '1013': 'Onder'
+                }
+            },
+            '1014': {
+                    'Over / Onder Full Time'
+                    'Handicap 4.5': {
+                        '1014': 'Over',
+                        '1015': 'Onder'
+                }
+            },
+            '1016': {
+                    'Over / Onder Full Time'
+                    'Handicap 5.5': {
+                        '1016': 'Over',
+                        '1017': 'Onder'
+                }
+            },
+            '1018': {
+                    'Over / Onder Full Time'
+                    'Handicap 6.5': {
+                        '1018': 'Over',
+                        '1019': 'Onder'
+                }
+            },
+            '1020': {
+                    'Over / Onder Full Time'
+                    'Handicap 7.5': {
+                        '1020': 'Over',
+                        '1021': 'Onder'
+                }
+            },
+            '10222': {
+                    'Even / Oneven Full Time': {
+                        '10222': 'Oneven',
+                        '10223': 'Even'
+                }
+            },
+            '10224': {
+                    'Over / Onder Thuis Fulltime'
+                        'Handicap 0.5': {
+                            '10224': 'Over',
+                            '10225': 'Onder'
+                }
+            },
+            '10226': {
+                    'Over / Onder Thuis Fulltime'
+                    'Handicap 1.5': {
+                        '10226': 'Over',
+                        '10227': 'Onder'
+                }
+            },
+            '10228': {
+                    'Over / Onder Thuis Fulltime'
+                    'Handicap 2.5': {
+                        '10228': 'Over',
+                        '10229': 'Onder'
+                }
+            },
+            '10230': {
+                    'Over / Onder Thuis Fulltime'
+                    'Handicap 3.5': {
+                        '10230': 'Over',
+                        '10231': 'Onder'
+                }
+            },
+            '10214': {'Draw No Bet': {
+                    '10214': 'Thuis',
+                    '10215': 'Uit'
+                }
+            },
             '10302': {
                 'Beiden teams scoren in tweede helft': {
                     '10302': 'Ja',
@@ -70,6 +165,18 @@ MARKETS = {
                 'Winnaar incl extra tijd': {
                     '111': 'Home',
                     '112': 'Away'
+                }
+            },
+            '1186' : {
+                'Over / Onder 140.5': {
+                    '1186': 'Over',
+                    '1187': 'Onder'
+                }
+            },
+            '1188': {
+                'Over / Onder 141.5': {
+                    '1189': 'Onder',
+                    '1188': 'Over'    
                 }
             }
         }
