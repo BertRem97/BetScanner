@@ -269,7 +269,7 @@ class OddsPapiClient:
 
     # Sharp books used only for median reference, NOT as bet targets
     SHARP_BOOKMAKERS = [
-        'pinnacle', 'sbobet', 'bwin.be', 'jackbit', 'betmgm', 'smarkets'
+        'pinnacle', 'sbobet', 'bwin.be', 'betfair.ex', 'betmgm', 'smarkets'
     ]
 
     def __init__(self, api_keys, settlements, confirmed_bets, requests_per_key: int = 250):
@@ -536,7 +536,6 @@ class OddsPapiClient:
             market_odds = {}
 
             for outcomeId, outcome_data in outcomes.items():
-                print("OUTCOME_ID", outcomeId, outcome_data)
                 players = outcome_data.get('players', {})
 
                 if '0' in players:
@@ -548,7 +547,6 @@ class OddsPapiClient:
             if market_odds:
                 odds[market_id] = market_odds
 
-        print("ODDSS", odds)
         return odds
 
 
@@ -1698,7 +1696,7 @@ class TelegramBot:
                 f"Uitkomst: *{value_bet.outcome}*\n\n"
                 f"*Odds overzicht:*\n"
                 f"{odds_table}\n\n"
-                f"*EV: {value_bet.ev_percentage:.2f}%*\n"
+                f"*Overwaarde: {value_bet.ev_percentage:.2f}%*\n"
                 f"Win kans: {value_bet.win_probability:.1%}\n\n"
                 f"💵*Inzet: €{value_bet.stake_amount:.2f}*\n"
                 f"Mogelijke winst: €{value_bet.possible_profit:.2f}\n"
@@ -2370,6 +2368,7 @@ class ValueBetScanner:
                     continue
 
                 fixture_ids.append(fixture_id)
+
 
         scores = self.odds_client.get_scores(fixture_ids)
         updated = wins = losses = 0
