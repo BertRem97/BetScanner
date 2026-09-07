@@ -186,6 +186,18 @@ MARKETS = {
                     '1023': 'Minder dan 8.5'
                 }
             },
+            '10320': {
+                'Draw No Bet Eerste Helft': {
+                    '10320': 'Home',
+                    '10321': 'Away'
+                }
+            },
+            '10322': {
+                'Draw No Bet Tweede Helft': {
+                    '10322': 'Home',
+                    '10323': 'Away'
+                }
+            },
 
         }   
     },
@@ -242,13 +254,13 @@ MARKETS = {
                     '191': 'Home',
                     '192': 'Away'
                 }
-            #},
-            #'193': {
-                #"Meeste 180's": {
-                    #'193': 'Home',
-                    #'194': 'Draw',
-                    #'195': 'Away'
-                #}
+            },
+            '193': {
+                "Meeste 180's": {
+                    '193': 'Home',
+                    '194': 'Draw',
+                    '195': 'Away'
+                }
             }
         }
     },
@@ -259,8 +271,78 @@ MARKETS = {
                     '131': 'Home',
                     '132': 'Away'
                 }
-            }
+            },
+            '133': {
+                'Winnaar Regular Time': {
+                    '133': 'Home',
+                    '134': 'Draw',
+                    '135': 'Away'
+                }
+            },
+            '136': {
+                'Meer / Minder dan 3.5 incl extra innings': {
+                    '136': 'Meer',
+                    '137': 'Minder'
+                }
+            },
+            '1310': {
+                'Meer / Minder dan 4.5 incl extra innings': {
+                    '1310': 'Meer',
+                    '1311': 'Minder'
+                }  
+            },
+            '1314': {
+                'Meer / Minder dan 5.5 incl extra innings': {
+                    '1314': 'Meer',
+                    '1315': 'Minder'
+                
+                }
+            },
+            '1318': {
+                'Meer / Minder dan 6.5 incl extra innings': {
+                    '1318': 'Meer',
+                    '1319': 'Minder'
+                
+                }
+            },
+            '1380': {
+                'Handicap 1.5 incl extra innings': {
+                    '1380': 'Home',
+                    '1381': 'Away'
+                }
+            },
+            '136': {
+                'Meer / Minder dan 3.5 incl extra innings': {
+                    '136': 'Meer',
+                    '137': 'Minder'
+                }
+            },
+            '1310': {
+                'Meer / Minder dan 4.5 incl extra innings': {
+                    '1310': 'Meer',
+                    '1311': 'Minder'
+                }
+            },
+            '1314': {
+                'Meer / Minder dan 5.5 incl extra innings': {
+                    '1314': 'Meer',
+                    '1315': 'Minder'
+                }
+            },
+            '1318': {
+                'Meer / Minder dan 6.5 incl extra innings': {
+                    '1318': 'Meer',
+                    '1319': 'Minder'
+                }
+            },
+
+
+
+
+
+
         }
+
     },
     '18': { #Thuis / Uit staan gewisseld bij bookmaker bc.game
         'Esports - League of Ledgends': {

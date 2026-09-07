@@ -486,7 +486,7 @@ class OddsPapiClient:
 
         except Exception as e:
             logger.error(f"Error fetching odds for {fixture_id}: {e}")
-            return {}
+            
         
   
     def get_scores(self, fixture_ids: List[str]) -> List[Dict]:
@@ -1534,6 +1534,7 @@ class TelegramBot:
         self.bot_token = config['telegram_bot_token']
         self.chat_id = config['telegram_chat_id']
         self.chat_id_performance = config["performance_chat_id"]
+        self.chat_id_sure_bets = config["sure_bet_chat_id"]
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
         self.sheets = sheets
         self.pending_bets: Dict[int, ValueBet] = {}
@@ -1667,12 +1668,12 @@ class TelegramBot:
             keyboard = {
                 "inline_keyboard": [[
                     {"text": "Bevestigen", "callback_data":
-                      f"confirm_{sure_bet.fixture_id}_{sure_bet.soft_bookmaker1}_{sure_bet.outcome_id1}-sure"},
+                      f"confirm_{sure_bet.fixture_id}_{sure_bet.soft_bookmaker1}_{sure_bet.outcome_id1}-sure-{self.chat_id_sure_bets}"},
                     {"text": "Afwijzen",   "callback_data": f"reject_{sure_bet.fixture_id}"}
                 ]]
             }
 
-            msg_id = self.send_message(message, keyboard=keyboard)
+            msg_id = self.send_message(message, keyboard=keyboard, chat_id=self.chat_id_sure_bets)
             if msg_id is not None:
                 self.pending_bets[msg_id] = sure_bet
                 return True
@@ -1707,12 +1708,12 @@ class TelegramBot:
             keyboard = {
                 "inline_keyboard": [[
                     {"text": "Bevestigen", "callback_data":
-                      f"confirm_{value_bet.fixture_id}_{value_bet.soft_bookmaker}_{value_bet.outcome_id}-value", 'bet_type':'value'},
+                      f"confirm_{value_bet.fixture_id}_{value_bet.soft_bookmaker}_{value_bet.outcome_id}-value-{self.chat_id}", 'bet_type':'value'},
                     {"text": "Afwijzen",   "callback_data": f"reject_{value_bet.fixture_id}"}
                 ]]
             }
 
-            msg_id = self.send_message(message, keyboard=keyboard)
+            msg_id = self.send_message(message, keyboard=keyboard, chat_id=self.chat_id)
             if msg_id is not None:
                 self.pending_bets[msg_id] = value_bet
                 return True
@@ -1816,23 +1817,38 @@ class TelegramBot:
         data = callback.get('data', '')
         message_id = callback['message'].get('message_id')
         _type = None
+        chat_id = None
 
         try:
-            _, _type = data.split('-')
-
+            data_list = data.split('-')
+            
         except:
-            pass
+            logger.warning("Could not extract callback data")
 
+        _type = data_list[1]
+        chat_id = data_list[2]
         self.answer_callback(callback_id)
 
         if data.startswith('confirm_') and message_id in self.pending_bets:
             bet = self.pending_bets[message_id]
-            return {'action': 'confirm', 'bet': bet, 'message_id': message_id, 'type': _type}
+            return {
+                'action': 'confirm', 
+                'bet': bet, 
+                'message_id': message_id, 
+                'type': _type, 
+                'chat_id': chat_id
+                }
 
         if data.startswith('reject_') and message_id in self.pending_bets:
             bet = self.pending_bets.pop(message_id)
             
-            return {'action': 'reject', 'bet': bet, 'message_id': message_id}
+            return {
+                'action': 'reject', ''
+                'bet': bet, 
+                'message_id': message_id, 
+                'type': _type, 
+                'chat_id': chat_id
+                }
 
         return None
 
@@ -2183,8 +2199,11 @@ class ValueBetScanner:
             }
 
         self.confirmed_bets.append(bet)
-        with open('confirmed_bets.json', 'r') as f:
-             data = json.load(f)
+        with open('confirmed_bets.json', "r") as f:
+            try:
+                data = json.load(f)
+            except json.JSONDecodeError:
+                data = []
 
         bets = [b for b in data if b['status'] != 'closed']
         bets.append(bet)
@@ -2629,6 +2648,8 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                             action = None
                         
                         if action == 'run':
+                            print("RUNNING NOW")
+                            print(self.is_scanning)
                             if not self.is_scanning:
                                 self.is_scanning = False
                                 self.is_scanning = True
@@ -2644,16 +2665,29 @@ Gebruik /manueel om zelf een weddenschap te loggen.
 
                         elif action == 'reject':
                             bet = result.get('bet')
+                            chat_id = result.get('chat_id')
                             message_id = result.get('message_id')
+                            _type = result.get('type')
                             if bet and message_id:
-                                self.telegram.edit_message(
-                                message_id,
-                                f"*AFGEWEZEN* ❌\n\n{bet.participant1} vs {bet.participant2}"
-                            )
-                            
+                                if _type == 'value':
+                                    self.telegram.edit_message(
+                                    message_id,
+                                    f"*AFGEWEZEN* ❌\n\n{bet.participant1} vs {bet.participant2}\n"
+                                    f"MARKET: {bet.market}\nUITKOMST: {bet.outcome}",
+                                    chat_id
+                                )
+                                elif _type == 'sure':
+                                    self.telegram.edit_message(
+                                    message_id,
+                                    f"*AFGEWEZEN* ❌\n\n{bet.participant1} vs {bet.participant2}\n"
+                                    f"MARKET: {bet.market}\nUITKOMSTEN: {bet.outcome1} {bet.outcome2}",
+                                    chat_id
+                                )
+
                         elif action == 'confirm':
                             bet = result.get('bet')
                             message_id = result.get('message_id')
+                            chat_id = result.get('chat_id')
 
                             if bet and message_id:
                                 _type = result.get('type')
@@ -2671,13 +2705,17 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                                         message_id,
                                         f"*BEVESTIGD* ✅\n\n"
                                         f"{bet.participant1} vs {bet.participant2}\n"
+                                        f"MARKET: {bet.market}\n" + f"UITKOMST: {bet.outcome}" if _type == "value" \
+                                              else f"UITKOMSTEN: {bet.outcome1} {bet.outcome2}",
+                                        chat_id
                                     )
 
                                 else:
                                     self.telegram.send_message(
                                         message_id,
                                         f"*LOGGEN MISLUKT* ❌\n\n"
-                                        f"Probeer opnieuw"
+                                        f"Probeer opnieuw",
+                                        chat_id
                                     )
             
                                     
