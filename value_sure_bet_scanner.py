@@ -70,6 +70,9 @@ class ApiKeyManager:
         self.total_requests = 0
         self._lock = threading.Lock()
 
+    def get_available_keys(self):
+        return len(self.api_keys)
+
     def remove_key(self, api_key: str):
         with self._lock:
             if api_key in self.api_keys:
@@ -314,6 +317,11 @@ class OddsPapiClient:
                         self.api_keys.remove(api_key)
                         logger.info(f"API KEY {api_key} drained, trying next one")
                         return self._make_request(endpoint, params)
+
+                    else:
+                        print(error)
+                        retrysec = error.get('retryMs', 500)
+                        return self._make_request(endpoint, params)
                 
 
                 if response.status_code == 404:
@@ -465,28 +473,32 @@ class OddsPapiClient:
             return []
 
     def get_odds(self, fixture_id: str) -> Dict:
-        try:
-            response = self._make_request("odds", {'fixtureId': fixture_id})
-            if response is None:
-                return None
-            response.raise_for_status()
-            return response.json()
-        
-        except requests.exceptions.ConnectionError as e:
-            logger.warning(
-                f"Connection reset {e}"
-            )
-            time.sleep(3)
-            return self.get_odds(fixture_id)
 
-        except requests.exceptions.ReadTimeout:
-            logger.warning("Oddspapi timeout, retrying...")
-            time.sleep(5)
-            return self.get_odds(fixture_id)
-
-        except Exception as e:
-            logger.error(f"Error fetching odds for {fixture_id}: {e}")
+        max_retries = 10000
+        for _ in range(max_retries):
+            try:
+                response = self._make_request("odds", {'fixtureId': fixture_id})
+                if response is None:
+                    return None
+                response.raise_for_status()
+                return response.json()
             
+            except requests.exceptions.ConnectionError as e:
+                logger.warning(
+                    f"Connection reset {e}"
+                )
+                time.sleep(3)
+                return self.get_odds(fixture_id)
+
+            except requests.exceptions.ReadTimeout:
+                logger.warning("Oddspapi timeout, retrying...")
+                time.sleep(5)
+                return self.get_odds(fixture_id)
+
+            except Exception as e:
+                logger.error(f"Error fetching odds for {fixture_id}: {e}")
+
+        logger.error(f"Failed to get odds of fixture after {max_retries} times")
         
   
     def get_scores(self, fixture_ids: List[str]) -> List[Dict]:
@@ -1649,16 +1661,9 @@ class TelegramBot:
                 f"*Uitkomst*: *{sure_bet.outcome1}* @ *{sure_bet.soft_odds1}*\n"
                 f"*Inzet: €{sure_bet.stake_amount1:.2f} @ "
                 f"{sure_bet.soft_bookmaker1}*\n\n"
-            )
-
-            if sure_bet.outcome2:
-                message += (
-                    f"*Uitkomst*: *{sure_bet.outcome2}* @ *{sure_bet.soft_odds2}*\n"
-                    f"*Inzet: €{sure_bet.stake_amount2:.2f} @ "
-                    f"{sure_bet.soft_bookmaker2}*\n\n"
-                )
-
-            message += (
+                f"*Uitkomst*: *{sure_bet.outcome2}* @ *{sure_bet.soft_odds2}*\n"
+                f"*Inzet: €{sure_bet.stake_amount2:.2f} @ "
+                f"{sure_bet.soft_bookmaker2}*\n\n"
                 f"💵 *Totale inzet*: €{self.config.get('total_stake_surebet', 0)}\n"
                 f"*Verzekerde winst*: €{sure_bet.guaranteed_profit:.2f}\n"
                 f"*Winst percentage*: {sure_bet.p_guaranteed_profit:.2%}\n"
@@ -1668,8 +1673,8 @@ class TelegramBot:
             keyboard = {
                 "inline_keyboard": [[
                     {"text": "Bevestigen", "callback_data":
-                      f"confirm_{sure_bet.fixture_id}_{sure_bet.soft_bookmaker1}_{sure_bet.outcome_id1}-sure-{self.chat_id_sure_bets}"},
-                    {"text": "Afwijzen",   "callback_data": f"reject_{sure_bet.fixture_id}"}
+                      f"confirm_{sure_bet.fixture_id}_{sure_bet.soft_bookmaker1}_{sure_bet.outcome_id1}|sure|{self.chat_id_sure_bets}"},
+                    {"text": "Afwijzen",   "callback_data": f"reject_{sure_bet.fixture_id}|sure|{self.chat_id_sure_bets}"}
                 ]]
             }
 
@@ -1708,8 +1713,8 @@ class TelegramBot:
             keyboard = {
                 "inline_keyboard": [[
                     {"text": "Bevestigen", "callback_data":
-                      f"confirm_{value_bet.fixture_id}_{value_bet.soft_bookmaker}_{value_bet.outcome_id}-value-{self.chat_id}", 'bet_type':'value'},
-                    {"text": "Afwijzen",   "callback_data": f"reject_{value_bet.fixture_id}"}
+                      f"confirm_{value_bet.fixture_id}_{value_bet.soft_bookmaker}_{value_bet.outcome_id}|value|{self.chat_id}"},
+                    {"text": "Afwijzen",   "callback_data": f"reject_{value_bet.fixture_id}|value|{self.chat_id}"}
                 ]]
             }
 
@@ -1800,7 +1805,6 @@ class TelegramBot:
         return []
 
 
-
     def process_update(self, update: Dict) -> Optional[Dict]:
         if 'callback_query' in update:
             return self._handle_callback(update['callback_query'])
@@ -1816,17 +1820,19 @@ class TelegramBot:
         callback_id = callback['id']
         data = callback.get('data', '')
         message_id = callback['message'].get('message_id')
-        _type = None
-        chat_id = None
+        _type = 'value'
+        chat_id = self.chat_id
 
         try:
-            data_list = data.split('-')
+            data_list = data.split('|')
+            _type = data_list[1]
+            chat_id = data_list[2]
+            print(data_list)
+            print(chat_id)
             
         except:
-            logger.warning("Could not extract callback data")
+            logger.warning("Could not extract callback data of automatic bet")
 
-        _type = data_list[1]
-        chat_id = data_list[2]
         self.answer_callback(callback_id)
 
         if data.startswith('confirm_') and message_id in self.pending_bets:
@@ -1967,7 +1973,7 @@ class TelegramBot:
         )
         keyboard = {
             "inline_keyboard": [[
-                {"text": "Opslaan", "callback_data": f"confirm_{bet.fixture_id}_{bet.soft_bookmaker}_manual"},
+                {"text": "Opslaan", "callback_data": f"confirm_{bet.fixture_id}_{bet.soft_bookmaker}"},
                 {"text": "Annuleer", "callback_data": f"reject_{bet.fixture_id}"}
             ]]
         }
@@ -2517,7 +2523,7 @@ class ValueBetScanner:
             tournaments = self.odds_client.get_tournaments(id)
             if tournaments is None:
                 logger.info("Stopping scanner due to unforseen problems")
-                msg = "Kon data niet ophalen, probeer opnieuw met andere keys of roteer IP adress"
+                msg = f"Kon data niet ophalen" 
                 self.is_scanning = False
                 self.telegram.send_message(msg)
                 return 
@@ -2537,7 +2543,7 @@ class ValueBetScanner:
 
           
                 if fixtures is None:
-                    msg = "Kon data niet ophalen, probeer opnieuw met andere keys of roteer IP adress"
+                    msg = "Kon data niet ophalen" 
                     logger.info("Stopping scanner due to unforseen problems")
                     self.is_scanning = False
                     self.telegram.send_message(msg)
@@ -2550,7 +2556,7 @@ class ValueBetScanner:
                     odds_data = self.odds_client.get_odds(fixture['fixtureId'])
                     if odds_data is None:
                         logger.info("Stopping scanner due to unforseen problems")
-                        msg = "Kon data niet ophalen, probeer opnieuw met andere keys of roteer IP adress"
+                        msg = "Kon data niet ophalen" 
                         self.is_scanning = False
                         self.telegram.send_message(msg)
                         return 
@@ -2615,11 +2621,8 @@ class ValueBetScanner:
                         self.telegram.send_value_bet_notification(sure_bet=bet)
 
                 sure_bets.clear()    
-
-        finished_msg = f"{len(value_bets)} value bets gevonden"
-        finished_msg_sure = f"{len(sure_bets)} sure bets gevonden"
         
-        self.telegram.send_message("Scanner *KLAAR*") 
+        self.telegram.send_message(f"Scanner *KLAAR*")
           
          
     def run_interactive(self):
@@ -2673,14 +2676,14 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                                     self.telegram.edit_message(
                                     message_id,
                                     f"*AFGEWEZEN* ❌\n\n{bet.participant1} vs {bet.participant2}\n"
-                                    f"MARKET: {bet.market}\nUITKOMST: {bet.outcome}",
+                                    f"*MARKET*: {bet.market}\n*UITKOMST*: {bet.outcome}",
                                     chat_id
                                 )
                                 elif _type == 'sure':
                                     self.telegram.edit_message(
                                     message_id,
                                     f"*AFGEWEZEN* ❌\n\n{bet.participant1} vs {bet.participant2}\n"
-                                    f"MARKET: {bet.market}\nUITKOMSTEN: {bet.outcome1} {bet.outcome2}",
+                                    f"*MARKET*: {bet.market}\n*UITKOMSTEN*: {bet.outcome1} & {bet.outcome2}",
                                     chat_id
                                 )
 
@@ -2701,20 +2704,32 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                                 if success:
                                     # Pas verwijderen nadat het opslaan gelukt is
                                     self.telegram.pending_bets.pop(message_id, None)
+
+                                    msg = (
+                                        f"*BEVESTIGD* ✅\n\n"
+                                        f"{bet.participant1} vs {bet.participant2}\n" 
+                                        f"*MARKET*: {bet.market}\n"
+                                    )
+
+                                    msg += f"*UITKOMST*: {bet.outcome}" if _type == 'value' else \
+                                    f"*UITKOMSTEN*: {bet.outcome1} & {bet.outcome2}"
+
                                     self.telegram.edit_message(
                                         message_id,
-                                        f"*BEVESTIGD* ✅\n\n"
-                                        f"{bet.participant1} vs {bet.participant2}\n"
-                                        f"MARKET: {bet.market}\n" + f"UITKOMST: {bet.outcome}" if _type == "value" \
-                                              else f"UITKOMSTEN: {bet.outcome1} {bet.outcome2}",
+                                        msg,
                                         chat_id
                                     )
 
                                 else:
+                                    msg = f"*LOGGEN MISLUKT* ❌\n\n"
+                                    f"{bet.participant1} vs {bet.participant2}\n"
+                                    f"*MARKET*: {bet.market}"
+
+                                    msg += f"*UITKOMST*: {bet.outcome}" if _type == 'value' else \
+                                    f"*UITKOMSTEN*: {bet.outcome1} & {bet.outcome2}"
+
                                     self.telegram.send_message(
-                                        message_id,
-                                        f"*LOGGEN MISLUKT* ❌\n\n"
-                                        f"Probeer opnieuw",
+                                        msg,
                                         chat_id
                                     )
             
