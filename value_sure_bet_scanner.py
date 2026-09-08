@@ -2590,7 +2590,7 @@ class ValueBetScanner:
             logger.info(f"\nFound {len(value_bets)} value bets for sport ID {id}")
             logger.info(f"\nFound {len(sure_bets)} sure bets for sport ID {id}")
 
-            self.is_scanning = True
+            self.is_scanning = False
 
             if value_bets:
                 value_bets.sort(
