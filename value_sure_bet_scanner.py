@@ -2590,7 +2590,7 @@ class ValueBetScanner:
             logger.info(f"\nFound {len(value_bets)} value bets for sport ID {id}")
             logger.info(f"\nFound {len(sure_bets)} sure bets for sport ID {id}")
 
-            self.is_scanning = False
+            self.is_scanning = True
 
             if value_bets:
                 value_bets.sort(
@@ -2620,8 +2620,9 @@ class ValueBetScanner:
                     if self.telegram:
                         self.telegram.send_value_bet_notification(sure_bet=bet)
 
-                sure_bets.clear()    
-        
+                sure_bets.clear()   
+
+        self.is_scanning = False 
         self.telegram.send_message(f"Scanner *KLAAR*")
           
          
