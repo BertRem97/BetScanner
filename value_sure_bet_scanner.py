@@ -667,50 +667,11 @@ class ValueBetCalculator:
         for market_id, market_data in soft_odds_by_outcome.items():
             for market_outcome, _ in market_data.items():
                if len(soft_odds_by_outcome[market_id].keys()) == 2:
+
+                    if market_id == '101':
+                        continue
+
                     data = []
-                
-                    for bet in self.confirmed_bets:
-                        try:
-                            fixture_id = bet['fixture_id']
-                            outcome_id = bet['outcome_id']
-                            status = bet['status']
-                            stake = bet['stake_amount']
-                            possible_profit = bet['possible_profit']
-                            soft_odds = bet['soft_odds']
-                            marketId = bet['market_id']
-                            
-                        except KeyError:
-                            continue
-
-                        if fixture_id == fixtureId and status == 'open' \
-                            and marketId == market_outcome:
-                            unloged_outcome = next(
-                                outcome for outcome in market_data
-                                if outcome != outcome_id
-                            )
-
-                            all_soft_unloged = (
-                                soft_odds_by_outcome
-                                .get(market_id, {})
-                                .get(unloged_outcome, {})
-                            )
-
-                            best_book_current = max(all_soft_unloged, key=lambda b: all_soft_unloged[b])
-                            best_price_current = all_soft_unloged[best_book_current]
-                            x = {'best_book_current': best_book_current,
-                                'best_price_current': best_price_current,
-                                'best_book_next': None,
-                                'best_price_next': None,
-                                'logged_odds': float(soft_odds),
-                                'possible_profit': float(possible_profit),
-                                'logged_stake': float(stake),
-                                'current_outcome': outcome_id,
-                                'next_outcome': None
-            
-                                }
-                            
-                            data.append(x)
-
                     Next_outcome = next(outcome for outcome in market_data \
                                         if outcome != market_outcome)
                     
@@ -795,6 +756,7 @@ class ValueBetCalculator:
 
                             stake2 = self.total_stake / best_price_next / (1 / best_price_current + 1 / best_price_next) \
                             if best_price_next else logged_stake
+
 
                             
                             sure_bets.append(SureBet(
