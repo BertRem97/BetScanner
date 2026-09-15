@@ -258,7 +258,7 @@ class OddsPapiClient:
 
     SOFT_BOOKMAKERS = [
         'cashpoint', 'unibet.be', 'betano', 'goldenpalacesports.be',
-        'bwin.be', 'napoleonsports.be', 'bcgame'
+        'bwin.be', 'napoleonsports.be'
 
         #ladbrokes.be
         #betcenter.be, 
@@ -1827,8 +1827,7 @@ class TelegramBot:
             data_list = data.split('|')
             _type = data_list[1]
             chat_id = data_list[2]
-            print(data_list)
-            print(chat_id)
+            
             
         except:
             logger.warning("Could not extract callback data of automatic bet")
@@ -2225,6 +2224,7 @@ class ValueBetScanner:
 
 
     def settle_match_winner(self, outcome_id, result):
+        
         goals_ht = (
             result.get('home_ht') or 0
         ) + (
@@ -2236,15 +2236,190 @@ class ValueBetScanner:
         ) + (
             result.get('away_end') or 0
         )
-        print('GOALS')
-        print(goals_ft)
 
-        print(outcome_id, result)
+        total_games_home = (
+            result.get('home_third_set', 0
+        ) + (
+            result.get('home_ht', 0)
+        ) + (
+            result.get('home_st', 0)
+        )
+        )
+
+        total_games_away = (
+            result.get('away_third_set', 0
+        ) + (
+            result.get('away_ht', 0)
+        ) + (
+            result.get('away_st', 0)
+        )
+        )
+
+
+        if outcome_id in ['1060']:
+            return result['home_end'] - 1.5 > result['away_end']
+
+        if outcome_id in ['1061']:
+            return result['away_end'] - 1.5 > result['home_end']
+
+        if outcome_id in ['1063']:
+            return result['away_end'] - 1.25 > result['home_end']
+
+        if outcome_id in ['1062']:
+            return result['home_end'] - 1.25 > result['away_end']
+
+        if outcome_id in ['1066']:
+            return result['home_end'] - 0.75 > result['away_end']
+
+        if outcome_id in ['1067']:
+            return result['away_end'] - 0.75 > result['home_end']
+
+        if outcome_id in ['1068']:
+            return result['home_end'] - 0.5 > result['away_end']
+
+        if outcome_id in ['1068']:
+            return result['away_end'] - 0.5 > result['home_end']
+        
         if outcome_id in ['181']:
             return result['away_end'] < result['home_end']
 
+        if outcome_id in ['1221']:
+            return goals_ft > 18.5
+
+        if outcome_id in ['1222']:
+            return goals_ft < 18.5
+
+        if outcome_id in ['1225']:
+            return goals_ft > 19.5
+
+        if outcome_id in ['1226']:
+            return goals_ft < 19.5
+
+        if outcome_id in ['1229']:
+            return goals_ft > 20.5
+
+        if outcome_id in ['1230']:
+            return goals_ft < 20.5
+
+        if outcome_id in ['1233']:
+            return goals_ft > 21.5
+
+        if outcome_id in ['1234']:
+            return goals_ft < 21.5
+
+        if outcome_id in ['1237']:
+            return goals_ft > 22.5
+
+        if outcome_id in ['1238']:
+            return goals_ft < 22.5
+
+        if outcome_id in ['12187']:
+            return total_games_home - 0.5 > total_games_away
+
+        if outcome_id in ['12188']:
+            return total_games_away - 0.5 > total_games_home
+
+        if outcome_id in ['12191']:
+            return total_games_home + 0.5 > total_games_away
+
+        if outcome_id in ['12192']:
+            return total_games_away + 0.5 > total_games_home
+
+        if outcome_id in ['12195']:
+            return total_games_home + 1.5 > total_games_away
+
+        if outcome_id in ['12196']:
+            return total_games_away + 1.5 > total_games_away
+
+        if outcome_id in ['12183']:
+            return total_games_home - 1.5 > total_games_away
+
+        if outcome_id in ['12184']:
+            return total_games_away - 0.5 > total_games_home
+
+                
+        if outcome_id in ['12179']:
+            return total_games_home - 2.5 > total_games_away
+
+        if outcome_id in ['12180']:
+            return total_games_away - 2.5 > total_games_home
+
+        if outcome_id in ['12199']:
+            return total_games_home + 2.5 > total_games_away
+
+        if outcome_id in ['12200']:
+            return total_games_away + 2.5 > total_games_home
+
+        if outcome_id in ['12175']:
+            return total_games_home - 3.5 > total_games_away
+
+        if outcome_id in ['12176']:
+            return total_games_away - 3.5 > total_games_home
+
+        if outcome_id in ['12203']:
+            return total_games_home + 3.5 > total_games_away
+
+        if outcome_id in ['12204']:
+            return total_games_away + 3.5 > total_games_home
+
+        if outcome_id in ['12171']:
+            return total_games_home - 4.5 > total_games_away
+
+        if outcome_id in ['12172']:
+            return total_games_away - 4.5 > total_games_home
+
+        if outcome_id in ['12207']:
+            return total_games_home + 4.5 > total_games_away
+
+        if outcome_id in ['12208']:
+            return total_games_away + 4.5 > total_games_home
+        
+        if outcome_id in ['12239']:
+            return result['home_end'] - 1.5 > result['away_end']
+
+        if outcome_id in ['12240']:
+            return result['away_end'] - 1.5 > result['home_end']
+
+        if outcome_id in ['12241']:
+            return result['home_end'] + 1.5 > result['away_end']
+
+        if outcome_id in ['12242']:
+            return result['away_end'] + 1.5 > result['home_end']
+        
         if outcome_id in ['12246']:
             return result['home_end'] == 0
+
+        if outcome_id in ["10231"]:
+            return result["home_full_time"] <= 3
+
+        if outcome_id in ['10321']:
+            if result['home_ht'] == result['away_ht']:
+                return 'terugbetaald'
+            return result['away_ht'] > result['home_ht']
+
+        if outcome_id in ['10320']:
+            if result['home_ht'] == result['away_ht']:
+                return 'terugbetaald'
+            return result['away_ht'] > result['home_ht']
+        
+        if outcome_id in ['10215']:
+            if result['home_end'] == result['away_end']:
+                return 'terugbetaald'
+            else:
+                return result['away_end'] > result['home_end']
+
+        if outcome_id in ['10214']:
+            if result['home_end'] == result['away_end']:
+                return 'terugbetaald'
+            else:
+                return result['away_end'] < result['home_end']
+
+        if outcome_id in ['10227']:
+            return result['home_end'] < 1.5
+
+        if outcome_id in ['10226']:
+            return result['home_end'] > 1.5
+        
 
         if outcome_id in ['12245']:
             return result['home_end'] > 0
@@ -2365,6 +2540,12 @@ class ValueBetScanner:
         if outcome_id == '1013':
             return goals_ft < 3.5
 
+        if outcome_id in ['1318']:
+            return goals_ft > 6.5
+
+        if outcome_id in ['151']:
+            return result['home_end'] > result['away_end']
+
         #if outcome_id == '193':
             #return 
         return None
@@ -2396,14 +2577,14 @@ class ValueBetScanner:
 
 
         scores = self.odds_client.get_scores(fixture_ids)
-        updated = wins = losses = 0
+        updated = wins = losses = refunded = 0
         if not scores:
             logger.info("Cannot set settlements, no finished bets found")
             return f"Geen beëindigde bets gevonden om bij te werken\n{len(self.odds_client.api_keys)} beschikbare api keys"
 
         if self.sheets:
-            total_profit = None
-            total_loss = None
+            total_profit = 0
+            total_loss = 0
             for i in scores:
                 for bet in self.confirmed_bets:
                     fid = bet['fixture_id']
@@ -2417,8 +2598,8 @@ class ValueBetScanner:
                     except:
                         pass
 
-                    #possible_profit = bet.get('possible_profit', None)
-                    #potential_loss = bet['stake_amount']
+                    possible_profit = bet.get('possible_profit', None)
+                    potential_loss = bet['stake_amount']
 
                     if (fid == i['fixtureId'] and bet['status'] == 'open'):
                         results = i.get('scores').get('periods') 
@@ -2427,21 +2608,27 @@ class ValueBetScanner:
                         full_time_result = results.get("fulltime", None)
                         end_score = results.get("result", None)
                         second_time_result = results.get("p2", None)
+                        third_set_result = results.get("p3", None)
 
                         end_score_home = float(end_score.get("participant1Score"))
                         end_score_away = float(end_score.get("participant2Score"))
 
                         result = {
-                            "home_full_time": None,
-                            "away_full_time": None,
-                            "home_ht": None,
-                            "away_ht": None,
-                            "home_st": None,
-                            "away_st": None,
+                            "home_full_time": 0,
+                            "away_full_time": 0,
+                            "home_ht": 0,
+                            "away_ht": 0,
+                            "home_st": 0,
+                            "away_st": 0,
+                            "home_third_set": 0,
+                            "away_third_set": 0,
                             "home_end": end_score_home,
                             "away_end": end_score_away
                             }
 
+                        if third_set_result:
+                            result['home_third_set'] = float(third_set_result.get("participant1Score"))
+                            result['away_third_set'] = float(third_set_result.get("participant2Score"))
 
                         if half_time_result:
                             result['home_ht'] = float(half_time_result.get("participant1Score"))
@@ -2461,13 +2648,22 @@ class ValueBetScanner:
                         
                         status = None
                         if win is not None:
-                            if win:
+                            if win == 'terugbetaald':
+                                refunded += 1
+                                status = "REFUND"
+
+                            elif win:
                                 wins += 1
                                 status = "WIN"
+                                total_profit.append(possible_profit)
                                 
                             elif not win:
                                 losses += 1
                                 status = "LOSE"
+                                total_loss.append(potential_loss)
+
+
+                           
 
                             print("-----------------------------------------")
                             print("MATCH", fid, outcome_id, status)
@@ -2487,19 +2683,20 @@ class ValueBetScanner:
                                     json.dump(self.confirmed_bets, f, indent=2)
 
                                 updated += 1
-
-            #profit = round(total_profit - total_loss, 2)
+            
+            profit = round(total_profit - total_loss, 2)
             msg_current = self.telegram._cmd_profit()
 
             return (
                 f"Bijgewerkt: {updated}\n"
                 f"Gewonnen: {wins}\n"
-                f"Verloren: {losses}\n\n"
-                #+ (f"€{profit} " + ("Winst" if profit > 0 else "Verlies") if possible_profit is not None else "")
+                f"Verloren: {losses}\n"
+                f"Terugbetaald: {refunded}\n\n"
+                f"€{profit}" + ("Winst" if profit > 0 else "Verlies") if profit != 0 else ""
                 f"{msg_current}"
                 f"{len(self.odds_client.api_keys)} beschikbare api keys"
             )
-                
+            
 
     def update_main_sheet_totals(self):
         """Sum A2:F6 from all MM-YYYY sheets."""
