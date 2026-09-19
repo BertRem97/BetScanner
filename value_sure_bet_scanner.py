@@ -2544,7 +2544,8 @@ class ValueBetScanner:
         updated = wins = losses = refunded = 0
         if not scores:
             logger.info("Cannot set settlements, no finished bets found")
-            return f"Geen beëindigde bets gevonden om bij te werken\n{len(self.odds_client.api_keys)} beschikbare api keys"
+            return f"Geen bets gevonden om bij te werken"
+
 
         if self.sheets:
             total_profit = 0
@@ -2654,9 +2655,8 @@ class ValueBetScanner:
                 f"Gewonnen: {wins}\n"
                 f"Verloren: {losses}\n"
                 f"Terugbetaald: {refunded}\n\n"
-                f"€{profit}" + ("Winst" if profit > 0 else "Verlies") if profit != 0 else ""
+                f"+ €{profit}" if profit > 0 else "- €{profit}" if profit != 0 else "" 
                 f"{msg_current}"
-                f"{len(self.odds_client.api_keys)} beschikbare api keys"
             )
             
 
