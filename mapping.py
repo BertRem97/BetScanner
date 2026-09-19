@@ -1,4 +1,48 @@
 MARKETS = {
+    "16": {
+        "Esports DOTA 2": {
+            '161': {
+                'Winnaar': {
+                    '161': 'Thuis',
+                    '162': 'Uit'
+                }
+            },
+            '163': {
+                'Totaal Maps': {
+                    '163': 'Meer dan 2.5',
+                    '164': 'Minder dan 2.5'
+                }
+            },
+            '1625': {
+                'Maps Handicap -1.5': {
+                    '1625': 'Thuis',
+                    '1626': 'Uit'
+                }
+            },
+            '1647': {
+                'Winnaar Map 1': {
+                    '1647': 'Thuis',
+                    '1648': 'Uit'
+                }
+            },
+            '1649': {
+                'Winnaar Map 2': {
+                    '1649': 'Thuis',
+                    '1650': 'Uit'
+                }
+            }
+        }
+    },
+    "58": {
+        'Esports Rainbow 6': {
+            '581': {
+                'Winnaar': {
+                    '581': 'Thuis',
+                    '582': 'Uit'
+                }
+            }
+        }
+    },
     "10": {
         "Voetbal": {
             "101": {

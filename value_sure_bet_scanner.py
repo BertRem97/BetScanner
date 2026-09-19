@@ -668,7 +668,10 @@ class ValueBetCalculator:
             for market_outcome, _ in market_data.items():
                if len(soft_odds_by_outcome[market_id].keys()) == 2:
 
-                    if market_id == '101':
+                    if market_id in ['101', '101902', '10208', 
+                                     '10211', '193', '133'
+                                     '313', '101902', '10208',
+                                     '10211']:
                         continue
 
                     data = []
@@ -1979,7 +1982,7 @@ Stake per Sure Bet: {self.config.get('total_stake_surebet')}
             open_bets = float(p['Open Bets'])
             bets_won = float(p['Gewonnen Bets'])
             bets_lost = float(p["Verloren Bets"])
-            inzet = float(p['Inzet'])
+            inzet = float(p['Totale inzet'])
             win_rate = float(p['Winrate'])
             roi = float(p['ROI'])
             ev = float(p['Gemiddelde EV'])
@@ -2299,7 +2302,6 @@ class ValueBetScanner:
         if outcome_id in ['12184']:
             return total_games_away - 0.5 > total_games_home
 
-                
         if outcome_id in ['12179']:
             return total_games_home - 2.5 > total_games_away
 
@@ -2617,15 +2619,13 @@ class ValueBetScanner:
                             elif win:
                                 wins += 1
                                 status = "WIN"
-                                total_profit.append(possible_profit)
+                                total_profit += possible_profit
                                 
                             elif not win:
                                 losses += 1
                                 status = "LOSE"
-                                total_loss.append(potential_loss)
+                                total_loss += potential_loss
 
-
-                           
 
                             print("-----------------------------------------")
                             print("MATCH", fid, outcome_id, status)

@@ -140,7 +140,17 @@
   "ab703431-a2a0-4900-838a-b50d5c640192", "5260076c-6e4a-4eb7-a426-d21e8bf3a9a8",
   "4c5f81b5-1fe8-4a6e-9dcf-bb6c8aedc7a5", "3b2d005e-ca2c-44c0-86d8-a21216c0fa52",
   "4cdf2308-6bb6-444f-a227-eb054cdbfb2b", "baa84b6b-5739-416d-becd-4bf328a358b7",
-  "fbb50ad9-d43c-44e0-b575-2853a99053f4"
+  "fbb50ad9-d43c-44e0-b575-2853a99053f4", "8145439d-c033-4892-b272-52cd2a893054",
+  "a8f952a7-a62a-4b67-b9fe-05cab86214d5", "ae286ebe-d0c3-4895-8135-3ebff50ae756",
+  "45a3e19c-5812-4424-821d-e59572665990", "45a3e19c-5812-4424-821d-e59572665990",
+  "a1e71a68-09d8-4203-ab79-f63473bd3fe3", "3739c982-eb91-4e7c-9c43-b19926d5ad09",
+  "3a8e7861-a16e-4a0d-8d76-b0af184f406c", "128bca8b-0b7a-495e-9ede-11f28c899b80",
+  "57cf964c-d46a-4cc5-ab6f-8709b42d62e4", "11a8484f-be17-466a-b3d7-38fd8c821171",
+  "ca105975-66d2-49c7-b8cb-7ab5242f9aca", "3d72168b-79fe-44f1-9d96-855226be06b9",
+  "d6089bd4-cfc0-4150-bd77-b4d942454aea", "d35b9fba-2f59-4fea-853e-5de8366ef352",
+  "934f6cdf-8803-489f-849c-6e9f172626b9", "a04aaa1d-37c8-46b4-a5c0-f20439d5cac1",
+  "83481229-cafb-4d1b-86c3-f0721c5eb4fb", "c6d8f6f5-f921-4f96-a5a7-b7d450f5ce90",
+  "4b54a9f3-a387-4eba-8edf-bd7cab2025b3", "7e810d0d-4803-43dd-8d41-ae05d8daad92"
 
   ],
 
@@ -157,11 +167,11 @@
   "min_ev_threshold": 5,
   "total_stake_surebet": 20,
   "min_win_probability": 50,
-  "kelly_fraction": 0.20,
+  "kelly_fraction": 0.10,
   "bankroll": 1000,
-  "sport_id": [15, 18, 19, 13, 10, 12, 11, 14],
-  "max_tournaments": 50,
-  "days_ahead": 10,
+  "sport_id": [15, 19, 16, 10, 12, 11, 14, 58],
+  "max_tournaments": 100,
+  "days_ahead": 20,
   "request_delay": 1.0,
   "scan_interval": 300,
   "vpn": {
