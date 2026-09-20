@@ -221,7 +221,7 @@ class ValueBet:
 
     def to_dict(self) -> Dict:
         # Build a compact odds overview string: "cashpoint:2.10 unibet:2.05 ..."
-        odds_str = '  '.join(
+        odds_str = '\n'.join(
             f"{bk} @ {o:.2f}"
             for bk, o in sorted(self.soft_bookmaker_odds.items(), key=lambda x: -x[1])
         )
@@ -240,15 +240,15 @@ class ValueBet:
             'League': self.tournament_name,
             'Soft Book': f"{self.soft_bookmaker} @ {self.soft_odds}",
             'Stake Amount': "",
-            'Total Stake': round(self.stake_amount, 2),
-            'Possible profit': round(self.possible_profit, 2),
-            'Odds overzicht (soft)': odds_str,
+            'Total Stake': self.stake_amount ,
+            'Possible profit': self.possible_profit,
+            'Odds overzicht (soft)': "",
             'Sharp Ref (mediaan)': round(self.sharp_odds, 4),
             'EV %': round(self.ev_percentage / 100, 4),
             'Win Prob': round(self.win_probability, 4),
             'Betslip': self.betslip_url or '',
         }
-
+    
 
 class OddsPapiClient:
     """Client for OddsPapi API v4 with multi-key support"""
@@ -901,12 +901,12 @@ class ValueBetCalculator:
                             ev_percentage=ev,
                             sport=sport_name,
                             win_probability=win_prob,
-                            stake_amount=stake_amount,
+                            stake_amount= round(stake_amount, 2),
                             bankroll=bankroll,
                             kelly_fraction=kelly_pct,
                             timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                             betslip_url=betslip_url,
-                            possible_profit= best_odds * stake_amount - stake_amount
+                            possible_profit= round(best_odds * stake_amount - stake_amount, 2)
                         ))
 
         return value_bets, sure_bets
@@ -1217,6 +1217,7 @@ class GoogleSheetsManager:
         if sheet_name is None:
             sheet_name = self.get_or_create_monthly_sheet()
         try:
+            print("WRITING")
             self.service.spreadsheets().values().append(
             spreadsheetId=self.spreadsheet_id,
             range=f"'{sheet_name}'!A:Z",
@@ -1692,6 +1693,12 @@ class TelegramBot:
     # ------------------------------------------------------------------
     # Update polling
     # ------------------------------------------------------------------
+
+    def delete_webhook(self):
+        requests.post(
+            f"{self.base_url}/deleteWebhook"
+        )
+
     def discard_pending_updates(self):
         try:
             response = requests.get(
@@ -1757,6 +1764,7 @@ class TelegramBot:
 
         except requests.exceptions.HTTPError as e:
             logger.error(f"Telegram HTTP error: {e}")
+            self.delete_webhook()
 
         except requests.exceptions.RequestException as e:
             logger.error(f"Telegram request error: {e}")
@@ -2450,7 +2458,8 @@ class ValueBetScanner:
             return goals_ht <= goals_ft
 
         if outcome_id == '10303':
-            return (goals_ht != 0 and goals_ft > goals_ht)
+            return result['home_end'] > result['home_ht'] and \
+            result['away_end'] > result['away_ht']
 
         if outcome_id == '101902':
             return result['home_end'] > result['away_end'] \
@@ -2648,15 +2657,13 @@ class ValueBetScanner:
                                 updated += 1
             
             profit = round(total_profit - total_loss, 2)
-            msg_current = self.telegram._cmd_profit()
 
             return (
                 f"Bijgewerkt: {updated}\n"
                 f"Gewonnen: {wins}\n"
                 f"Verloren: {losses}\n"
                 f"Terugbetaald: {refunded}\n\n"
-                f"+ €{profit}" if profit > 0 else "- €{profit}" if profit != 0 else "" 
-                f"{msg_current}"
+                f"+ €{profit}" if profit > 0 else f"- €{profit}" if profit != 0 else "" 
             )
             
 
@@ -2715,7 +2722,7 @@ class ValueBetScanner:
                     odds_data = self.odds_client.get_odds(fixture['fixtureId'])
                     if odds_data is None:
                         logger.info("Stopping scanner due to unforseen problems")
-                        msg = "Kon data niet ophalen" 
+                        msg = "Kon data niet ophalen\nAlle API KEYS zijn uitgeput" 
                         self.is_scanning = False
                         self.telegram.send_message(msg)
                         return 
@@ -2814,7 +2821,6 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                             print("RUNNING NOW")
                             print(self.is_scanning)
                             if not self.is_scanning:
-                                self.is_scanning = False
                                 self.is_scanning = True
 
                                 scan_thread = threading.Thread(
@@ -2827,6 +2833,7 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                             self.is_scanning = False
 
                         elif action == 'reject':
+                            print('reject')
                             bet = result.get('bet')
                             chat_id = result.get('chat_id')
                             message_id = result.get('message_id')
@@ -2848,6 +2855,7 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                                 )
 
                         elif action == 'confirm':
+                            print('confirm')
                             bet = result.get('bet')
                             message_id = result.get('message_id')
                             chat_id = result.get('chat_id')
@@ -2857,6 +2865,7 @@ Gebruik /manueel om zelf een weddenschap te loggen.
 
                                 success = False
                                 if _type == 'value':
+                                    print('loggin')
                                     success = self._log_bet(value_bet=bet)
                                 elif _type == 'sure':
                                     success = self._log_bet(sure_bet=bet)
@@ -2936,6 +2945,7 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                 row = [d.get(h, '') for h in SHEET_HEADERS]
                 sheet_name = self.sheets.get_or_create_monthly_sheet(year=data[0], month=data[1])
                 if self.sheets.append_row(row, sheet_name=sheet_name):
+                    print('YUPPS')
                     self._save_confirmed(value_bet=value_bet)
                     logger.info(f"Bet opgeslagen: {value_bet.fixture_id}")
                     return True
