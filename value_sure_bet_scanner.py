@@ -365,7 +365,7 @@ class OddsPapiClient:
 
     def get_tournaments(self, sport_id: int = 10) -> List[Dict]:
 
-        max_retries = 10000
+        max_retries = 100000
 
         for attempt in range(max_retries):
 
@@ -1732,7 +1732,14 @@ class TelegramBot:
                 f"{self.base_url}/getUpdates",
                 params={
                     "offset": self.last_update_id + 1,
-                    "timeout": timeout
+                    "timeout": timeout,
+                    "allowed_updates": json.dumps([
+                        "message",
+                        "edited_message",
+                        "channel_post",
+                        "edited_channel_post",
+                        "callback_query"
+                    ])
                 },
                 timeout=(10, timeout + 10)   # connect timeout, read timeout
             )
@@ -1746,7 +1753,6 @@ class TelegramBot:
                 return []
 
             updates = result.get("result", [])
-
             if updates:
                 self.last_update_id = updates[-1]["update_id"]
 
@@ -1821,7 +1827,7 @@ class TelegramBot:
             bet = self.pending_bets.pop(message_id)
             
             return {
-                'action': 'reject', ''
+                'action': 'reject',
                 'bet': bet, 
                 'message_id': message_id, 
                 'type': _type, 
@@ -2810,6 +2816,7 @@ Gebruik /manueel om zelf een weddenschap te loggen.
             try:
                 for update in self.telegram.get_updates():
                     result = self.telegram.process_update(update)
+
          
                     if result:
                         try:
@@ -2818,7 +2825,6 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                             action = None
                         
                         if action == 'run':
-                            print("RUNNING NOW")
                             print(self.is_scanning)
                             if not self.is_scanning:
                                 self.is_scanning = True
@@ -2833,7 +2839,6 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                             self.is_scanning = False
 
                         elif action == 'reject':
-                            print('reject')
                             bet = result.get('bet')
                             chat_id = result.get('chat_id')
                             message_id = result.get('message_id')
@@ -2855,7 +2860,6 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                                 )
 
                         elif action == 'confirm':
-                            print('confirm')
                             bet = result.get('bet')
                             message_id = result.get('message_id')
                             chat_id = result.get('chat_id')
@@ -2865,7 +2869,6 @@ Gebruik /manueel om zelf een weddenschap te loggen.
 
                                 success = False
                                 if _type == 'value':
-                                    print('loggin')
                                     success = self._log_bet(value_bet=bet)
                                 elif _type == 'sure':
                                     success = self._log_bet(sure_bet=bet)
@@ -2945,7 +2948,6 @@ Gebruik /manueel om zelf een weddenschap te loggen.
                 row = [d.get(h, '') for h in SHEET_HEADERS]
                 sheet_name = self.sheets.get_or_create_monthly_sheet(year=data[0], month=data[1])
                 if self.sheets.append_row(row, sheet_name=sheet_name):
-                    print('YUPPS')
                     self._save_confirmed(value_bet=value_bet)
                     logger.info(f"Bet opgeslagen: {value_bet.fixture_id}")
                     return True
