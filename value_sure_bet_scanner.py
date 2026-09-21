@@ -1217,7 +1217,6 @@ class GoogleSheetsManager:
         if sheet_name is None:
             sheet_name = self.get_or_create_monthly_sheet()
         try:
-            print("WRITING")
             self.service.spreadsheets().values().append(
             spreadsheetId=self.spreadsheet_id,
             range=f"'{sheet_name}'!A:Z",
@@ -2663,13 +2662,18 @@ class ValueBetScanner:
                                 updated += 1
             
             profit = round(total_profit - total_loss, 2)
+            profit_text = (
+                f"+ €{profit:.2f}" if profit > 0
+                else f"- €{abs(profit):.2f}" if profit < 0
+                else ""
+            )
 
             return (
                 f"Bijgewerkt: {updated}\n"
                 f"Gewonnen: {wins}\n"
                 f"Verloren: {losses}\n"
                 f"Terugbetaald: {refunded}\n\n"
-                f"+ €{profit}" if profit > 0 else f"- €{profit}" if profit != 0 else "" 
+                f"{profit_text}"
             )
             
 
