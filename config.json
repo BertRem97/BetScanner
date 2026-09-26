@@ -10,7 +10,7 @@
   "google_spreadsheet_id": "1Q2ALPTkGx8SICor1c4cDjZWI5Ewg_OKugvr0yUNY_WQ",
   "min_ev_threshold": 5,
   "total_stake_surebet": 20,
-  "min_win_probability": 50,
+  "min_win_probability": 60,
   "kelly_fraction": 0.10,
   "bankroll": 1000,
   "sport_id": [15, 19, 10, 12, 11, 14],
@@ -254,6 +254,20 @@
   "b90dc5ca-e057-479d-b46b-d2cee8b16eee", "f94b4421-6a99-4360-8b94-04a5d5671073",
   "5a4031ec-9edd-4eee-9b12-6bb3a78c2362", "278f7b1a-b416-4043-a517-7f9c2d2616d7",
   "6d792edc-aeba-4ff1-8715-0c478a9fe43d", "ba97d19f-864e-4b19-a5b4-898c943a6665",
-  "e950249e-418f-464a-8a8f-6a4b45e32c80", "03b3f915-3c50-4985-bf60-fc370a1c4b1a"
+  "e950249e-418f-464a-8a8f-6a4b45e32c80", "03b3f915-3c50-4985-bf60-fc370a1c4b1a",
+  "2ba2130e-6f50-481b-ab58-70290a96a93a", "e995f727-4600-40d2-83bd-e6b10dad2854",
+  "788fc623-26cf-4404-abc0-0f536736d956", "69f23db1-3402-4959-9730-f05cfa8a3ff9",
+  "74ebb3cb-4981-42ea-92ef-7d28715be6d5", "f53f4c57-0625-4f74-b2a8-8bbdcd47b26a",
+  "bcd5132d-81a1-4e4b-92a3-ebe87d665f06", "44971152-2329-4fdb-ac50-16409d7c0749",
+  "75d11de9-7f1f-4397-9c34-2ec33a705a76", "b12c21b8-48fc-4b4e-918a-ea9937b791e8",
+  "08a81106-3336-4b2c-a22b-15597d631487", "ea0bfc73-da16-4ab2-976a-14957cd396f5",
+  "76aeb8e7-f02f-4f90-9e65-3c735576588a", "9e8771fc-d63f-4521-a1d5-e88c3cfd950a",
+  "045dea1e-9a23-4e26-bf36-18c30ee30952", "272cf932-e7eb-4a85-a462-6c35371b0ff0",
+  "be71bda8-49dc-4757-9d1d-79d3c44a70ad", "70a6b6b9-db3a-415a-9031-3ba9eae0ed89",
+  "9583d6f8-902b-4d02-88d1-1013c7244526", "d97fa567-60a2-42db-8a24-d2038ce7cefe",
+  "946d09b9-c28b-40eb-a0a4-842818014566", "16fd58b4-a189-470f-a2de-ea7909329485",
+  "3ee5527f-d2df-48ed-bc18-6cdba0e4fb18", "a02dcfd1-0f6d-4f81-9b62-916f600673c9",
+  "a02dcfd1-0f6d-4f81-9b62-916f600673c9", "c143bfe0-5830-468d-ace5-6718bed7be88"
+
   ]
 }

@@ -1217,9 +1217,10 @@ class GoogleSheetsManager:
         if sheet_name is None:
             sheet_name = self.get_or_create_monthly_sheet()
         try:
+            print("ROW", row)
             self.service.spreadsheets().values().append(
             spreadsheetId=self.spreadsheet_id,
-            range=f"'{sheet_name}'!A:Z",
+            range=f"'{sheet_name}'!A:A",
             valueInputOption="USER_ENTERED",
             insertDataOption="INSERT_ROWS",
             body={"values": [row]}
@@ -1991,11 +1992,11 @@ Stake per Sure Bet: {self.config.get('total_stake_surebet')}
     def _cmd_profit(self) -> Dict:
         if self.sheets:
             p = self.sheets.get_profit_loss()
-            total_bets = float(p['Totaal Bets'])
-            open_bets = float(p['Open Bets'])
-            bets_won = float(p['Gewonnen Bets'])
-            bets_lost = float(p["Verloren Bets"])
-            inzet = float(p['Totale inzet'])
+            total_bets = int(p['Totaal Bets'])
+            open_bets = int(p['Open Bets'])
+            bets_won = int(p['Gewonnen Bets'])
+            bets_lost = int(p["Verloren Bets"])
+            inzet = float(p['Inzet Value Bets'])
             win_rate = float(p['Winrate'])
             roi = float(p['ROI'])
             ev = float(p['Gemiddelde EV'])
@@ -2277,7 +2278,7 @@ class ValueBetScanner:
             return goals_ft > 20.5
 
         if outcome_id in ['1230']:
-            return goals_ft < 20.5
+            return total_games_home + total_games_away < 20.5
 
         if outcome_id in ['1233']:
             return goals_ft > 21.5
@@ -2463,8 +2464,13 @@ class ValueBetScanner:
             return goals_ht <= goals_ft
 
         if outcome_id == '10303':
-            return result['home_end'] > result['home_ht'] and \
-            result['away_end'] > result['away_ht']
+            return (
+                    result['home_end'] >= result['home_ht'] and \
+                    result['away_end'] == result['away_ht']) or \
+                (
+                    result['away_end'] >= result['away_ht'] and \
+                    result['home_end'] == result['home_ht']
+                )
 
         if outcome_id == '101902':
             return result['home_end'] > result['away_end'] \
