@@ -1217,7 +1217,6 @@ class GoogleSheetsManager:
         if sheet_name is None:
             sheet_name = self.get_or_create_monthly_sheet()
         try:
-            print("ROW", row)
             self.service.spreadsheets().values().append(
             spreadsheetId=self.spreadsheet_id,
             range=f"'{sheet_name}'!A:A",
@@ -2281,16 +2280,16 @@ class ValueBetScanner:
             return total_games_home + total_games_away < 20.5
 
         if outcome_id in ['1233']:
-            return goals_ft > 21.5
+            return total_games_home + total_games_away > 21.5
 
         if outcome_id in ['1234']:
-            return goals_ft < 21.5
+            return total_games_home + total_games_away < 21.5
 
         if outcome_id in ['1237']:
-            return goals_ft > 22.5
+            return total_games_home + total_games_away > 22.5
 
         if outcome_id in ['1238']:
-            return goals_ft < 22.5
+            return total_games_home + total_games_away < 22.5
 
         if outcome_id in ['12187']:
             return total_games_home - 0.5 > total_games_away
@@ -2661,6 +2660,8 @@ class ValueBetScanner:
                                     and bet['outcome_id'] == outcome_id
                                     ):
                                     bet['status'] = 'closed'
+                                    self.confirmed_bets.remove(bet)
+
                             
                                 with open('confirmed_bets.json', 'w') as f:
                                     json.dump(self.confirmed_bets, f, indent=2)
